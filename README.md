@@ -22,6 +22,7 @@ PYTHON=$(which python) PYCALL_JL_RUNTIME_PYTHON=$(which python) julia --project 
 # Install the Python package
 cd dev/GLRenderer/src/renderer
 python setup.py develop
+pip install -r requirements.txt
 cd ../../../..
 ```
 
