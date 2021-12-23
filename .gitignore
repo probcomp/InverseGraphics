@@ -1,0 +1,3 @@
+*.sublime-*
+dev/*
+Manifest.toml
