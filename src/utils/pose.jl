@@ -1,6 +1,5 @@
 
 import Rotations
-import StaticArrays: StaticVector, @SVector
 import PoseComposition: Pose
 import LinearAlgebra: I
 import Base: convert

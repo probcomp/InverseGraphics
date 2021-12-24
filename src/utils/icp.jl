@@ -1,6 +1,5 @@
 import Clustering, NearestNeighbors, LinearAlgebra
 import Statistics
-import StaticArrays
 
 function get_transform_between_two_registered_clouds(c1, c2)
     centroid_1 = mean(c1, dims=2)

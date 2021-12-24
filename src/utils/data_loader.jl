@@ -7,10 +7,6 @@ function load_rgb(filename)
     py"""
     import numpy as np
     import imageio
-    def get_depth(depth_path):
-        depth = imageio.imread(depth_path)
-        depth = depth.astype(np.float)
-        return depth
     def get_rgb(rgb_path):
         rgb = imageio.imread(rgb_path)
         return rgb
@@ -26,14 +22,9 @@ function load_depth(filename)
         depth = imageio.imread(depth_path)
         depth = depth.astype(np.float)
         return depth
-    def get_rgb(rgb_path):
-        rgb = imageio.imread(rgb_path)
-        return rgb
     """
     py"get_depth"(filename)
 end
-
-export load_rgb, load_depth
 
 function load_ycb_model_list(YCB_DIR)
     model_list = readlines(joinpath(YCB_DIR, "model_list.txt"))
@@ -91,38 +82,19 @@ function get_ycb_scene_frame_id_from_idx(YCB_DIR, IDX)
 end
 
 function load_ycbv_scene(YCB_DIR, IDX)
-    # Keyframes
-    keyframes = readlines(joinpath(YCB_DIR, "keyframe.txt"))
-    scene_t = map(u->map(x->parse(Int,x), split(u,"/")), keyframes);
-
-    SCENE, T = scene_t[IDX];
+    SCENE, T = get_ycb_scene_frame_id_from_idx(YCB_DIR, IDX)
     load_ycbv_scene(YCB_DIR, SCENE, T)
 end
 
 function load_ycbv_scene(YCB_DIR, SCENE, T)
     # Load relevant files
-    py"""
-    import numpy as np
-    import imageio
-
-    def get_depth(depth_path):
-        depth = imageio.imread(depth_path)
-        depth = depth.astype(np.float)
-        return depth
-
-    def get_rgb(rgb_path):
-        rgb = imageio.imread(rgb_path)
-        return rgb
-    """
-
-    rgb_image = py"get_rgb"(joinpath(YCB_DIR,lpad(SCENE,4,"0"),lpad(T,6,"0")*"-color.png"))
-    depth_image = py"get_depth"(joinpath(YCB_DIR,lpad(SCENE,4,"0"),lpad(T,6,"0")*"-depth.png"));
+    rgb_image = load_rgb(joinpath(YCB_DIR,lpad(SCENE,4,"0"),lpad(T,6,"0")*"-color.png"))
+    depth_image = load_depth(joinpath(YCB_DIR,lpad(SCENE,4,"0"),lpad(T,6,"0")*"-depth.png"));
 
     mat = MAT.matopen(joinpath(YCB_DIR,lpad(SCENE,4,"0"),lpad(T,6,"0")*"-meta.mat"));
     keys(mat)
 
     Rt_mat_to_pose(mat) = Pose(mat[1:3,end],R.RotMatrix3{Float64}(mat[1:3,1:3]));
-
 
     cam_Rt = read(mat,"rotation_translation_matrix")
     cam_pose = inverse_pose(Rt_mat_to_pose(cam_Rt))
@@ -193,14 +165,8 @@ function load_ycbv_models_adjusted(YCB_DIR, world_scaling_factor)
 end
 
 function load_ycbv_scene_adjusted(YCB_DIR, IDX, world_scaling_factor, id_to_shift)
-    gt_poses, ids, rgb_image, depth_image, cam_pose, camera = load_ycbv_scene(YCB_DIR, IDX)
-    gt_poses = [get_c_relative_to_a(
-        Pose(p.pos * world_scaling_factor, p.orientation),
-        Pose(id_to_shift[id]...))
-    for (id,p) in zip(ids,gt_poses)]
-    cam_pose = Pose(cam_pose.pos * world_scaling_factor, cam_pose.orientation)
-    depth_image = depth_image * world_scaling_factor;
-    return gt_poses, ids, rgb_image, depth_image, cam_pose, camera
+    SCENE, T = get_ycb_scene_frame_id_from_idx(YCB_DIR, IDX)
+    return load_ycbv_scene_adjusted(YCB_DIR, SCENE, T, world_scaling_factor, id_to_shift)
 end
 
 function load_ycbv_scene_adjusted(YCB_DIR, SCENE, T, world_scaling_factor, id_to_shift)
@@ -303,6 +269,3 @@ function load_synthetic_objposenet_fusion_predictions(SYTH_DIR, T)
     ];
     densefusion_poses, densefusion_ids
 end
-
-export load_bop_scene, load_bop_object_ply, load_rgb, load_depth, load_ycbv_models, load_ycbv_scene, load_ycbv_dense_fusion_predictions, load_ycbv_point_xyz, load_ycb_model_obj_file_paths,
-            load_synthetic_dense_fusion_predictions, load_synthetic_objposenet_fusion_predictions, get_ycb_scene_frame_id_from_idx, load_synthetic_scene_adjusted

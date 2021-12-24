@@ -10,11 +10,11 @@ import MiniGSG as S
 import Rotations as R
 import PoseComposition as PC
 import PoseComposition: Pose
-import StaticArrays:SVector, @SVector, StaticVector, SMatrix
 import Colors
 import PyCall
 import LightGraphs as LG
 import MetaGraphs as MG
+import StaticArrays: SVector, @SVector, StaticVector
 
 include("utils/bbox.jl")
 include("utils/clustering.jl")
@@ -36,5 +36,7 @@ include("model/sg_model.jl")
 include("model/sg_model_utils.jl")
 
 include("inference/inference.jl")
+
+include("feature_detection/feature_detection.jl")
 
 end # module
