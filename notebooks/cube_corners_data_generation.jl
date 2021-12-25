@@ -24,18 +24,18 @@ camera_intrinsics = GL.CameraIntrinsics(400, 400, 1000.0, 1000.0 , 200.0, 200.0,
 renderer = GL.setup_renderer(camera_intrinsics, GL.DepthMode())
 camera_intrinsics
 
-# box_dims = [0.2, 0.2, 0.2]
-# v,n,f = GL.box_mesh_from_dims(box_dims)
-# GL.load_object!(renderer, v, f)
-# box_box = S.Box(box_dims...)
-# nominal_feature_coords_in_obj_frame = T.get_bbox_corners(box_box)
-
-
-v,n,f, = renderer.gl_instance.load_obj_parameters(
-    "/home/nishadg/mcs/ThreeDVision.jl/data/ycbv2/models/025_mug/textured_simple.obj")
-v *= 5.0
+box_dims = [0.2, 0.2, 0.2]
+v,n,f = GL.box_mesh_from_dims(box_dims)
 GL.load_object!(renderer, v, f)
-nominal_feature_coords_in_obj_frame = reshape([0.32, 0.0, 0.0], (3,1))
+box_box = S.Box(box_dims...)
+nominal_feature_coords_in_obj_frame = T.get_bbox_corners(box_box)
+
+
+# v,n,f, = renderer.gl_instance.load_obj_parameters(
+#     "/home/nishadg/mcs/ThreeDVision.jl/data/ycbv2/models/025_mug/textured_simple.obj")
+# v *= 5.0
+# GL.load_object!(renderer, v, f)
+# nominal_feature_coords_in_obj_frame = reshape([0.32, 0.0, 0.0], (3,1))
 # -
 
 cube_pose = Pose(0.0, 0.0, 0.0, IDENTITY_ORN)
@@ -49,9 +49,10 @@ V.reset_visualizer()
 V.viz(cloud)
 V.viz(nominal_feature_coords_in_obj_frame;channel_name=:red,color=I.colorant"red")
 
+resolution = 0.015
+
 # +
 training_dataset = []
-resolution = 0.025
 
 for _ in 1:1000
     cube_pose = Pose(0.0, 0.0, 0.0, GDS.uniform_rot3())
@@ -156,5 +157,25 @@ def deserialize(filename):
 PyCall.py"serialize"("data.pkl", training_dataset_2)
 
 recovered_data = PyCall.py"deserialize"("data.pkl");
+
+
+
+# # Visualize PyTorch Results
+
+in_grid, out_grid = PyCall.py"deserialize"("result.pkl");
+
+@show size(in_grid)
+@show size(out_grid)
+
+# +
+V.reset_visualizer()
+i = 28
+thresh = 0.9
+in_data = hcat([[Tuple(x)...] for x in findall(in_grid[i,1,:,:,:] .> 0.0)]...)
+out_data = hcat([[Tuple(x)...] for x in findall(out_grid[i,:,:,:,1] .> thresh )  ]...)
+
+V.viz(in_data * resolution)
+V.viz(out_data * resolution; channel_name=:red, color=I.colorant"red")
+# -
 
 
