@@ -57,7 +57,7 @@ cloud = T.move_points_to_frame_b(
     camera_pose
 )
 
-resolution = 0.01
+resolution = 0.015
 
 # +
 training_dataset = []
@@ -207,8 +207,8 @@ in_grid, out_grid = PyCall.py"deserialize"("result.pkl");
 @show size(out_grid)
 
 V.reset_visualizer()
-i = 7
-thresh = 0.7
+i = 3
+thresh = 0.9
 in_data = hcat([[Tuple(x)...] for x in findall(in_grid[i,1,:,:,:] .> 0.0)]...)
 out_data = hcat([[Tuple(x)...] for x in findall(out_grid[i,:,:,:,1] .> thresh )  ]...)
 @show size(out_data)
