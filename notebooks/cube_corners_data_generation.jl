@@ -1,4 +1,4 @@
-import Revise
+## import Revise
 import PyCall
 import GLRenderer as GL
 import PoseComposition: Pose, IDENTITY_POSE, IDENTITY_ORN
@@ -9,6 +9,7 @@ import NearestNeighbors as NN
 import Rotations as R
 import DataStructures as DS
 import InverseGraphics as T
+import Statistics
 import GenDirectionalStats as GDS
 import MiniGSG as S
 try
@@ -24,18 +25,28 @@ camera_intrinsics = GL.CameraIntrinsics(400, 400, 1000.0, 1000.0 , 200.0, 200.0,
 renderer = GL.setup_renderer(camera_intrinsics, GL.DepthMode())
 camera_intrinsics
 
-box_dims = [0.2, 0.2, 0.2]
-v,n,f = GL.box_mesh_from_dims(box_dims)
-GL.load_object!(renderer, v, f)
-box_box = S.Box(box_dims...)
-nominal_feature_coords_in_obj_frame = T.get_bbox_corners(box_box)
+# box_dims = [0.2, 0.2, 0.2]
+# v,n,f = GL.box_mesh_from_dims(box_dims)
+# GL.load_object!(renderer, v, f)
+# box_box = S.Box(box_dims...)
+# nominal_feature_coords_in_obj_frame = T.get_bbox_corners(box_box)
 
+
+v,n,f, = renderer.gl_instance.load_obj_parameters(
+    "/home/nishadg/mcs/ThreeDVision.jl/data/ycbv2/models/025_mug/textured_simple.obj")
+v *= 5.0
+GL.load_object!(renderer, v, f)
+nominal_feature_coords_in_obj_frame = reshape([0.32, 0.0, 0.0], (3,1))
 
 # v,n,f, = renderer.gl_instance.load_obj_parameters(
-#     "/home/nishadg/mcs/ThreeDVision.jl/data/ycbv2/models/025_mug/textured_simple.obj")
+#     "/home/nishadg/mcs/ThreeDVision.jl/data/ycbv2/models/019_pitcher_base/textured_simple.obj")
 # v *= 5.0
 # GL.load_object!(renderer, v, f)
-# nominal_feature_coords_in_obj_frame = reshape([0.32, 0.0, 0.0], (3,1))
+# nominal_feature_coords_in_obj_frame = reshape([-0.35, -0.35, 0.35], (3,1))
+
+V.reset_visualizer()
+V.viz(collect(transpose(v)))
+V.viz(nominal_feature_coords_in_obj_frame;channel_name=:red,color=I.colorant"red")
 # -
 
 cube_pose = Pose(0.0, 0.0, 0.0, IDENTITY_ORN)
@@ -45,11 +56,8 @@ cloud = T.move_points_to_frame_b(
     GL.depth_image_to_point_cloud(depth_image, camera_intrinsics), 
     camera_pose
 )
-V.reset_visualizer()
-V.viz(cloud)
-V.viz(nominal_feature_coords_in_obj_frame;channel_name=:red,color=I.colorant"red")
 
-resolution = 0.015
+resolution = 0.01
 
 # +
 training_dataset = []
@@ -89,7 +97,7 @@ end
 
 # -
 
-voxel_grid, visible_feature_grid = training_dataset[2]
+voxel_grid, visible_feature_grid = training_dataset[3]
 V.reset_visualizer()
 V.viz(voxel_grid * resolution)
 V.viz(visible_feature_grid * resolution; channel_name=:red, color=I.colorant"red")
@@ -98,6 +106,7 @@ V.viz(visible_feature_grid * resolution; channel_name=:red, color=I.colorant"red
 # +
 min_coord = Int[100, 100, 100]
 max_coord = Int[-100, -100, -100]
+
 for (voxel_grid, visible_feature_grid) in training_dataset
     mi, ma = T.min_max(voxel_grid)
     min_coord = min.(min_coord, mi[:])
@@ -130,8 +139,38 @@ for (voxel_grid, visible_feature_grid) in training_dataset
     push!(training_dataset_2, (in_grid, out_grid))
 end
 
+
+# for (voxel_grid, visible_feature_grid) in training_dataset
+
+# (voxel_grid, visible_feature_grid) = training_dataset[1]
+
+# mi, ma = T.min_max(voxel_grid)
+# dimensions = (ma .- mi) .+ 1
+# in_grid = zeros(Bool, dimensions...)
+# for x in eachcol(voxel_grid)
+#     idx = (x .- mi .+ 1)
+#     in_grid[idx...] = true 
+# end
+
+# ker = 5
+# padded_in_grid = fill(false,(size(in_grid) .+ ker*2)...)
+# @show size(in_grid)
+# @show size(padded_in_grid)
+# padded_in_grid[(ker+1):end-ker,(ker+1):end-ker,(ker+1):end-ker] = in_grid
+
+# x=[
+#     padded_in_grid[i-ker:i+ker,j-ker:j+ker,k-ker:k+ker]
+#     for i in (ker+1):(size(padded_in_grid)[1]-ker),
+#      j in (ker+1):(size(padded_in_grid)[2]-ker),
+#      k in (ker+1):(size(padded_in_grid)[3]-ker)
+            
+# ];
+# @show size(x)
+# @show Statistics.mean(map(any,x))
+
 # +
-in_grid, out_grid = training_dataset_2[100]
+in_grid, out_grid = training_dataset_2[1]
+@show size(in_grid)
 in_data = hcat([[Tuple(x)...] for x in findall(in_grid)]...)
 out_data = hcat([[Tuple(x)...] for x in findall(out_grid)]...)
 
@@ -139,6 +178,8 @@ V.reset_visualizer()
 V.viz(in_data * resolution)
 V.viz(out_data * resolution; channel_name=:red, color=I.colorant"red")
 # -
+
+sum(in_grid) / length(in_grid)
 
 PyCall.py"""
 import pickle
@@ -158,8 +199,6 @@ PyCall.py"serialize"("data.pkl", training_dataset_2)
 
 recovered_data = PyCall.py"deserialize"("data.pkl");
 
-
-
 # # Visualize PyTorch Results
 
 in_grid, out_grid = PyCall.py"deserialize"("result.pkl");
@@ -167,15 +206,13 @@ in_grid, out_grid = PyCall.py"deserialize"("result.pkl");
 @show size(in_grid)
 @show size(out_grid)
 
-# +
 V.reset_visualizer()
-i = 28
-thresh = 0.9
+i = 7
+thresh = 0.7
 in_data = hcat([[Tuple(x)...] for x in findall(in_grid[i,1,:,:,:] .> 0.0)]...)
 out_data = hcat([[Tuple(x)...] for x in findall(out_grid[i,:,:,:,1] .> thresh )  ]...)
-
-V.viz(in_data * resolution)
-V.viz(out_data * resolution; channel_name=:red, color=I.colorant"red")
-# -
+@show size(out_data)
+V.viz(in_data * resolution ./ 3.0)
+V.viz(out_data * resolution ./ 3.0; channel_name=:red, color=I.colorant"red")
 
 
