@@ -31,7 +31,6 @@ camera_intrinsics
 # box_box = S.Box(box_dims...)
 # nominal_feature_coords_in_obj_frame = T.get_bbox_corners(box_box)
 
-
 v,n,f, = renderer.gl_instance.load_obj_parameters(
     "/home/nishadg/mcs/ThreeDVision.jl/data/ycbv2/models/025_mug/textured_simple.obj")
 v *= 5.0
@@ -39,10 +38,10 @@ GL.load_object!(renderer, v, f)
 nominal_feature_coords_in_obj_frame = reshape([0.32, 0.0, 0.0], (3,1))
 
 # v,n,f, = renderer.gl_instance.load_obj_parameters(
-#     "/home/nishadg/mcs/ThreeDVision.jl/data/ycbv2/models/019_pitcher_base/textured_simple.obj")
-# v *= 5.0
+#     "/home/nishadg/mcs/ThreeDVision.jl/data/ycbv2/models/011_banana/textured_simple.obj")
+# v *= 2.0
 # GL.load_object!(renderer, v, f)
-# nominal_feature_coords_in_obj_frame = reshape([-0.35, -0.35, 0.35], (3,1))
+# nominal_feature_coords_in_obj_frame = reshape([0.12, 0.14, -0.02], (3,1))
 
 V.reset_visualizer()
 V.viz(collect(transpose(v)))
@@ -130,7 +129,7 @@ for (voxel_grid, visible_feature_grid) in training_dataset
     out_grid = zeros(Bool, dimensions...)
     for x in eachcol(visible_feature_grid)
         idx = (x .- min_coord .+ 1)
-        window_half_length = 2
+        window_half_length = 1
         l = max.((idx .- window_half_length),1)
         h = min.((idx .+ window_half_length),dimensions)
         out_grid[l[1]:h[1],l[2]:h[2],l[3]:h[3]] .= true 
@@ -207,7 +206,7 @@ in_grid, out_grid = PyCall.py"deserialize"("result.pkl");
 @show size(out_grid)
 
 V.reset_visualizer()
-i = 3
+i = 20
 thresh = 0.9
 in_data = hcat([[Tuple(x)...] for x in findall(in_grid[i,1,:,:,:] .> 0.0)]...)
 out_data = hcat([[Tuple(x)...] for x in findall(out_grid[i,:,:,:,1] .> thresh )  ]...)
