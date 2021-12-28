@@ -1,5 +1,6 @@
 import Clustering, NearestNeighbors, LinearAlgebra
 import Statistics
+import StaticArrays: SMatrix
 
 function get_transform_between_two_registered_clouds(c1, c2)
     centroid_1 = mean(c1, dims=2)
@@ -68,6 +69,30 @@ function icp_object_pose(init_pose, obs, get_cloud_func;
 
     p
 end
+
+function icp_camera_pose(init_pose, obs, get_cloud_func;
+    c1_tree=nothing, random_rotation_initialization=false, outer_iterations=5, iterations=10)
+    p = init_pose
+    if random_rotation_initialization
+        p = Pose(p.pos, uniform_rot3())
+    end
+
+    if isnothing(c1_tree)
+        c1_tree = NearestNeighbors.KDTree(obs)
+    else
+        @assert length(c1_tree.data) == size(obs)[2]
+    end
+
+    c = get_cloud_func(p)
+    for _ in 1:outer_iterations
+        T = icp(obs, c; iterations=iterations, c1_tree=c1_tree)
+        p = get_c_relative_to_a(p, inv(T))
+        c = get_cloud_func(p)
+    end
+
+    p
+end
+
 
 
 
