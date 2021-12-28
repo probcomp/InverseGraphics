@@ -9,6 +9,10 @@ end
 function obs_addr()
     :obs
 end
+function camera_pose_addr()
+    :camera_pose
+end
+
 function get_structure(trace)
     trace[structure_addr()]
 end
@@ -25,6 +29,18 @@ end
 function get_obs_cloud(trace)
     trace[:obs]
 end
+function get_gen_cloud_in_world_frame(trace, i)
+    move_points_to_frame_b(get_retval(trace).rendered_clouds[i], trace[:camera_pose])
+end
+function get_gen_cloud_in_world_frame(trace)
+    move_points_to_frame_b(get_retval(trace).rendered_clouds[1], trace[:camera_pose])
+end
+function get_obs_cloud_in_world_frame(trace)
+    move_points_to_frame_b(trace[:obs], trace[:camera_pose])
+end
+
+
+
 function get_object_boxes(trace)
     get_args(trace)[1].boxes
 end

@@ -146,13 +146,12 @@ end
     boxes::Vector{S.Box}
     hyperparams::Hyperparams
     get_cloud_from_poses_and_idx::Function
-    camera_pose::Pose
     N::Int
 end
 
 export Hyperparams, SceneGraphPriorModelParameters, SceneModelParameters
 
-function render_clouds(model_params::SceneModelParameters, scene_graph)
+function render_clouds(model_params::SceneModelParameters, scene_graph, camera_pose)
     # Since each type of object has an associated shape distribution, we approximately integrate out the shape variable
     # by sampling shapes from each object type's shape distribution and then summing the weighted scores for these samples.
     # This sampling does not occur in this generative function, instead the samples are stored in the `meshes` field of each
@@ -166,10 +165,10 @@ function render_clouds(model_params::SceneModelParameters, scene_graph)
     rendered_clouds = [
         let
             rendered_point_cloud_in_camera_frame = model_params.get_cloud_from_poses_and_idx(
-                poses, i, model_params.camera_pose
+                poses, i, camera_pose
             )
-            rendered_point_cloud_in_world_frame = move_points_to_frame_b(rendered_point_cloud_in_camera_frame,model_params.camera_pose)
-            voxelize(rendered_point_cloud_in_world_frame, model_params.hyperparams.resolution)
+            # rendered_point_cloud_in_world_frame = move_points_to_frame_b(rendered_point_cloud_in_camera_frame, camera_pose)
+            voxelize(rendered_point_cloud_in_camera_frame, model_params.hyperparams.resolution)
         end
         for i in 1:model_params.N
     ]
@@ -186,8 +185,9 @@ Sample a scene
     N : Number of shape samples to approximately integrate over
 """
 @gen (static) function scene(model_params::SceneModelParameters)
+    camera_pose ~ uniformPose(-1000.0,1000.0,-1000.0,1000.0,-1000.0,1000.0)
     scene_graph ~ scene_graph_prior(model_params)
-    rendered_clouds = render_clouds(model_params, scene_graph)
+    rendered_clouds = render_clouds(model_params, scene_graph, camera_pose)
     p_outlier ~ exponential(1/model_params.hyperparams.p_outlier)
     noise ~ exponential(1/model_params.hyperparams.noise)
     obs_cloud = {:obs} ~ uniform_mixture_from_template_multi_cloud(
@@ -200,13 +200,7 @@ Sample a scene
             obs_cloud=obs_cloud)
 end
 
-@gen (static) function scene_graph_prior_model(model_params)
-    scene_graph ~ scene_graph_prior(model_params)
-    return (scene_graph=scene_graph)
-end
-
-
 Gen.@load_generated_functions
 
 
-export scene, scene_graph_prior_model
+export scene
