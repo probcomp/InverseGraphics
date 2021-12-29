@@ -90,4 +90,8 @@ function rotation_between_two_vectors(u,v)
     q = R.QuatRotation(LinearAlgebra.dot(u,half),LinearAlgebra.cross(u,half)...)
 end
 
+function mix(a,b,alpha)
+    alpha .* a .+ (1 - alpha) .* b
+end
+
 export voxelize, min_max, discretize, center_cloud, pose_distance
