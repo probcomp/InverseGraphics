@@ -21,8 +21,8 @@ world_scaling_factor = 100.0
 id_to_cloud, id_to_shift, id_to_box  = T.load_ycbv_models_adjusted(YCB_DIR, world_scaling_factor);
 all_ids = sort(collect(keys(id_to_cloud)));
 
-SCENE = 55
-IDX = 1000
+SCENE = 48
+IDX = 630
 
 gt_poses, ids, rgb_image, gt_depth_image, cam_pose, original_camera = T.load_ycbv_scene_adjusted(
     YCB_DIR, SCENE, IDX, world_scaling_factor, id_to_shift
@@ -30,11 +30,30 @@ gt_poses, ids, rgb_image, gt_depth_image, cam_pose, original_camera = T.load_ycb
 rgb = GL.view_rgb_image(rgb_image;in_255=true)
 
 import Plots
+
+import Plots
 depth_obs_plot = Plots.heatmap(gt_depth_image; c=:thermal,clim=(20.0, 140.0), ylim=(0, 480), xlim=(0, 640),
     yflip=true, aspect_ratio=:equal, legend = :none, yticks=false, xticks=false, xaxis=false, yaxis=false)
 
+renderer = GL.setup_renderer(original_camera, GL.DepthMode())
+obj_paths = T.load_ycb_model_obj_file_paths(YCB_DIR)
+for id in all_ids
+    v,n,f,t = renderer.gl_instance.load_obj_parameters(
+        obj_paths[id]
+    )
+    v = v * world_scaling_factor
+    v .-= id_to_shift[id]'
+    GL.load_object!(renderer, v, n, f
+    )
+end
+
+rerendered_depth_image = GL.gl_render(renderer, ids, gt_poses, IDENTITY_POSE)
+GL.view_depth_image(rerendered_depth_image)
+depth_obs_plot = Plots.heatmap(rerendered_depth_image; c=:thermal,clim=(40.0, 130.0), ylim=(0, 480), xlim=(0, 640),
+    yflip=true, aspect_ratio=:equal, legend = :none, yticks=false, xticks=false, xaxis=false, yaxis=false)
+
 # +
-renderer = GL.setup_renderer(original_camera, GL.SegmentationMode())
+renderer = GL.setup_renderer(original_camera, GL.RGBMode())
 obj_paths = T.load_ycb_model_obj_file_paths(YCB_DIR)
 
 for id in all_ids
@@ -43,13 +62,19 @@ for id in all_ids
     )
     v = v * world_scaling_factor
     v .-= id_to_shift[id]'
-    
+    v,n,f = GL.mesh_from_voxelized_cloud(GL.voxelize(collect(transpose(v)), 0.3), 0.3)
     GL.load_object!(renderer, v, n, f
     )
 end
+# -
+
+colors = [I.colorant"lightsalmon", I.colorant"goldenrod1",I.colorant"darkseagreen1", I.colorant"hotpink", I.colorant"cadetblue1", 
+    I.colorant"navajowhite4", I.colorant"firebrick2"]
+rgb_img,_ = GL.gl_render(renderer, ids, gt_poses, colors, IDENTITY_POSE)
+GL.view_rgb_image(rgb_img)
 
 # +
-idx = 4
+idx = 5
 # id = ids[1]
 p = gt_poses[1]
 colors = map(I.RGBA,I.distinguishable_colors(length(ids)))
@@ -129,9 +154,6 @@ for id in all_ids
 end
 
 rgb_data, _ = GL.gl_render(renderer, [ids[idx]], [end_pose], IDENTITY_POSE)
-GL.view_rgb_image(rgb_data)
-
-rgb_data, _ = GL.gl_render(renderer, ids, gt_poses, IDENTITY_POSE)
 GL.view_rgb_image(rgb_data)
 
 renderer = GL.setup_renderer(original_camera, GL.SegmentationMode())
@@ -238,27 +260,6 @@ end
 
 V.viz_box(point_list, :box4; color=I.colorant"black")
 
-renderer = GL.setup_renderer(original_camera, GL.TextureMode())
-obj_paths = T.load_ycb_model_obj_file_paths(YCB_DIR)
-texture_paths = T.load_ycb_model_texture_file_paths(YCB_DIR)
-for id in all_ids
-    v,n,f,t = renderer.gl_instance.load_obj_parameters(
-        obj_paths[id]
-    )
-    v = v * world_scaling_factor
-    v .-= id_to_shift[id]'
-    
-    GL.load_object!(renderer, v, n, f, t,
-        texture_paths[id]
-    )
-end
-
-idx= 4
-rgb_data, _ = GL.gl_render(renderer, [ids[idx]], [gt_poses[idx]], IDENTITY_POSE)
-GL.view_rgb_image(rgb_data)
-
-import GenDirectionalStats as GDS
-rgb_data, _ = GL.gl_render(renderer, [ids[2]], [Pose([0.0, 0.0, 50.0], GDS.uniform_rot3())], IDENTITY_POSE)
-GL.view_rgb_image(rgb_data)
+1 ∈ x
 
 

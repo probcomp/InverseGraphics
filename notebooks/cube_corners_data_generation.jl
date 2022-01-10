@@ -96,7 +96,7 @@ end
 
 # -
 
-voxel_grid, visible_feature_grid = training_dataset[3]
+voxel_grid, visible_feature_grid = training_dataset[4]
 V.reset_visualizer()
 V.viz(voxel_grid * resolution)
 V.viz(visible_feature_grid * resolution; channel_name=:red, color=I.colorant"red")
@@ -168,15 +168,30 @@ end
 # @show Statistics.mean(map(any,x))
 
 # +
-in_grid, out_grid = training_dataset_2[1]
+in_grid, out_grid = training_dataset_2[2]
 @show size(in_grid)
 in_data = hcat([[Tuple(x)...] for x in findall(in_grid)]...)
 out_data = hcat([[Tuple(x)...] for x in findall(out_grid)]...)
 
 V.reset_visualizer()
-V.viz(in_data * resolution)
-V.viz(out_data * resolution; channel_name=:red, color=I.colorant"red")
+V.viz(in_data * resolution  / 2.0)
+V.viz(out_data * resolution / 2.0; channel_name=:red, color=I.colorant"red")
 # -
+
+for i in 1:100
+   in_grid, out_grid = training_dataset_2[i]
+    @show size(in_grid)
+    in_data = hcat([[Tuple(x)...] for x in findall(in_grid)]...)
+    out_data = hcat([[Tuple(x)...] for x in findall(out_grid)]...)
+
+    V.reset_visualizer()
+    V.viz(in_data * resolution  / 2.0)
+    @show size(out_data)
+    if size(out_data)[1] > 0
+#         V.viz(out_data * resolution / 2.0; channel_name=:red, color=I.colorant"red")
+    end
+    sleep(0.5)
+end
 
 sum(in_grid) / length(in_grid)
 
@@ -206,12 +221,23 @@ in_grid, out_grid = PyCall.py"deserialize"("result.pkl");
 @show size(out_grid)
 
 V.reset_visualizer()
-i = 20
-thresh = 0.9
+i = 15
+thresh = 0.7
 in_data = hcat([[Tuple(x)...] for x in findall(in_grid[i,1,:,:,:] .> 0.0)]...)
 out_data = hcat([[Tuple(x)...] for x in findall(out_grid[i,:,:,:,1] .> thresh )  ]...)
 @show size(out_data)
 V.viz(in_data * resolution ./ 3.0)
 V.viz(out_data * resolution ./ 3.0; channel_name=:red, color=I.colorant"red")
+
+for i in 1:50
+    V.reset_visualizer()
+    thresh = 0.7
+    in_data = hcat([[Tuple(x)...] for x in findall(in_grid[i,1,:,:,:] .> 0.0)]...)
+    out_data = hcat([[Tuple(x)...] for x in findall(out_grid[i,:,:,:,1] .> thresh )  ]...)
+    V.viz(in_data * resolution ./ 3.0)
+    if size(out_data)[1] > 0
+        V.viz(out_data * resolution ./ 3.0; channel_name=:red, color=I.colorant"red")
+    end
+end
 
 

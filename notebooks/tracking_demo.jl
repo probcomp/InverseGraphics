@@ -20,10 +20,10 @@ world_scaling_factor = 100.0
 id_to_cloud, id_to_shift, id_to_box  = T.load_ycbv_models_adjusted(YCB_DIR, world_scaling_factor);
 all_ids = sort(collect(keys(id_to_cloud)));
 
-SCENE = 50
+SCENE = 57
 
 gt_poses, ids, rgb_image, gt_depth_image, cam_pose, original_camera = T.load_ycbv_scene_adjusted(
-    YCB_DIR, SCENE,1, world_scaling_factor, id_to_shift
+    YCB_DIR, SCENE,200, world_scaling_factor, id_to_shift
 );
 GL.view_rgb_image(rgb_image;in_255=true)
 
@@ -45,9 +45,13 @@ function get_cloud_from_ids_and_poses(ids, poses, camera_pose)
     end
     cloud
 end
+V.reset_visualizer()
 c = get_cloud_from_ids_and_poses(ids, map(x->T.get_c_relative_to_a(cam_pose,x), gt_poses), cam_pose)
 V.viz(T.move_points_to_frame_b(c,cam_pose))
 # GL.view_depth_image(d)
+
+depth_image = GL.gl_render(renderer, ids, gt_poses, IDENTITY_POSE)
+GL.view_depth_image(clamp.(depth_image, 0.0, 200.0))
 
 # +
 hypers = T.Hyperparams(slack_dir_conc=300.0, slack_offset_var=0.5, p_outlier=0.01, 
@@ -84,7 +88,7 @@ V.reset_visualizer()
 V.viz(constraints[T.obs_addr()])
 # -
 
-trace, _ = Gen.generate(T.scene, (params,), constraints);
+@time trace, _ = Gen.generate(T.scene, (params,), constraints);
 Gen.get_score(trace)
 
 V.reset_visualizer()
@@ -96,7 +100,7 @@ V.viz(T.get_gen_cloud_in_world_frame(trace) ./ 2.0; color=I.colorant"red", chann
 inferred_poses = []
 trace_history = []
 timesteps = []
-for time in 2:5:1800
+for time in 2:1:1800
     gt_poses, ids, rgb_image, gt_depth_image, cam_pose, original_camera = T.load_ycbv_scene_adjusted(
         YCB_DIR, SCENE, time, world_scaling_factor, id_to_shift
     );
@@ -156,7 +160,7 @@ Serialization.serialize("data.save2", (inferred_poses, trace_history, timesteps)
 # inferred_poses, trace_history, timesteps= Serialization.deserialize("data.save");
 
 # +
-idx = 610
+idx = 3
 trace = trace_history[idx]
 time = timesteps[idx]
 
