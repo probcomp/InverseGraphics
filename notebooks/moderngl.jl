@@ -174,6 +174,23 @@ p = perspective_matrix(cam.width, cam.height, cam.fx, cam.fy,
     cam.near, cam.far
 )
 
+window_hint = [
+    (GLFW.SAMPLES,      0),
+    (GLFW.DEPTH_BITS,   24),
+    (GLFW.ALPHA_BITS,   8),
+    (GLFW.RED_BITS,     8),
+    (GLFW.GREEN_BITS,   8),
+    (GLFW.BLUE_BITS,    8),
+    (GLFW.STENCIL_BITS, 0),
+    (GLFW.AUX_BUFFERS,  0),
+    (GLFW.CONTEXT_VERSION_MAJOR, 3),
+    (GLFW.CONTEXT_VERSION_MINOR, 3),
+    (GLFW.OPENGL_PROFILE, GLFW.OPENGL_CORE_PROFILE),
+    (GLFW.OPENGL_FORWARD_COMPAT, GL_TRUE),
+]
+for (key, value) in window_hint
+    GLFW.WindowHint(key, value)
+end
 window = GLFW.CreateWindow(cam.width, cam.height, "DepthRenderer")
 GLFW.MakeContextCurrent(window)
 compute_depth_shader, pos_attr = make_compute_depth_shader()
@@ -252,5 +269,7 @@ end
 
 
 view_depth_image(depth_image)
+
+
 
 
