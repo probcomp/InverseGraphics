@@ -1,3 +1,6 @@
 *.sublime-*
 dev/*
 Manifest.toml
+*.DS_Store
+venv/*
+data/*

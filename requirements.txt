@@ -1,0 +1,4 @@
+Pillow
+jupyter
+jupytext
+numpy
