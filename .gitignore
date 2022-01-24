@@ -2,5 +2,6 @@
 dev/*
 Manifest.toml
 *.DS_Store
-venv/*
+venv/
 data/*
+.ipynb_checkpoints/
