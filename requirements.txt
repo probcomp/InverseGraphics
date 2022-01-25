@@ -2,3 +2,4 @@ Pillow
 jupyter
 jupytext
 numpy
+imageio

@@ -38,5 +38,14 @@ function get_all_undirected_trees(num_verts)
     possible_graphs = prufer_code_to_tree.(possible_codes)[:]
 end
 
-export prufer_code_to_tree, get_all_undirected_trees
+function get_all_possible_scene_graphs(num_verts; depth_limit=nothing)
+    possible_undirected_graphs = get_all_undirected_trees(num_verts)
+    possible_scene_graphs = map(G -> LG.bfs_tree(G, num_verts), possible_undirected_graphs)
+    if !isnothing(depth_limit)
+        dists = maximum.(LightGraphs.gdistances.(possible_scene_graphs, LG.nv(possible_scene_graphs[1])));
+        possible_scene_graphs = possible_scene_graphs[dists .<= depth_limit];
+    end
+    possible_scene_graphs
+end
 
+    

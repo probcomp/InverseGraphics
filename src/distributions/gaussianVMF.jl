@@ -53,4 +53,8 @@ function Gen.logpdf_grad(
     (nothing, nothing, nothing, nothing)
 end
 
+function (::GaussianVMF)(center, positionStdev, orientationKappa)
+    return Gen.random(GaussianVMF(), center, positionStdev, orientationKappa)
+end
+
 export gaussianVMF

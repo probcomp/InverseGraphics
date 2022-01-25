@@ -84,7 +84,8 @@ function Gen.logpdf(
     m = size(X, 2)
     n = size(Y, 2)
     logp_numpoints = Gen.logpdf(geometric, n,
-                                _UniformMixtureFromTemplate_p_numpoints_Y(m))
+                                0.5)
+                                # _UniformMixtureFromTemplate_p_numpoints_Y(m))
     r = radius
 
     # all_idxs is an array of arrays, where the array all_idxs[i] contains all indices j such that

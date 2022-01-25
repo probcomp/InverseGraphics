@@ -1,6 +1,6 @@
  function contact_submap_from_shape_contact(contact::S.ShapeContact) :: Gen.ChoiceMap
     pc = contact.planarContact
-    angle = RotMatrix{2}(pc.angle)
+    angle = R.RotMatrix{2}(pc.angle)
     if isnothing(pc.slack)
         slack_dir = UnitVector3([0.0, 0.0, -1.0])
         slack_offset = 0.0
@@ -33,7 +33,7 @@ function structure_move_get_equivalent_sliding_param(
         (poses[parent_idx] * S.getContactPlane(object_boxes[parent_idx], parent_face)) \
         (poses[child_idx] * S.getContactPlane(object_boxes[child_idx], child_face)),
     )
-    contact = S.ShapeContact(parent_face, (), child_face, (), pc)
+    contact = S.ShapeContact(parent_face, Real[], child_face, Real[], pc)
     return contact_submap_from_shape_contact(contact)
 end
 

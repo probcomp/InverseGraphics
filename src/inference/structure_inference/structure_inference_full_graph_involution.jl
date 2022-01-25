@@ -119,21 +119,21 @@ function full_structure_move_involution_func(
                 bboxes,
             )
             set_submap!(constraints, contact_addr(idx), cm)
-            jacobian_correction += TO_DIRECTION_AND_PLANE_ROTATION_JACOBIAN_CORRECTION
+            jacobian_correction += GenDirectionalStats.TO_DIRECTION_AND_PLANE_ROTATION_JACOBIAN_CORRECTION
 
         else
             if isFloating(prev_structure,idx)
                 continue
             end
             constraints[floating_pose_addr(idx)] = current_poses[idx]
-            jacobian_correction += FROM_DIRECTION_AND_PLANE_ROTATION_JACOBIAN_CORRECTION
+            jacobian_correction += GenDirectionalStats.FROM_DIRECTION_AND_PLANE_ROTATION_JACOBIAN_CORRECTION
 
         end
     end
 
     args = get_args(trace)
     argdiffs = map((_) -> NoChange(), args)
-    new_trace, weight, _, _ = Gen.update(trace, args, argdiffs, constraints)
+    new_trace, weight, _ = Gen.update(trace, args, argdiffs, constraints)
     weight += jacobian_correction
     return (new_trace, bwd_choices, weight)
 end

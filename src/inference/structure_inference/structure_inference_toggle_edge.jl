@@ -86,7 +86,7 @@ function structure_move_involution(
                 object_boxes,
             )
             set_submap!(constraints, contact_addr(i), cm)
-            jacobian_correction = TO_DIRECTION_AND_PLANE_ROTATION_JACOBIAN_CORRECTION
+            jacobian_correction = GenDirectionalStats.TO_DIRECTION_AND_PLANE_ROTATION_JACOBIAN_CORRECTION
         else
 
             # sliding to floating
@@ -100,7 +100,7 @@ function structure_move_involution(
             end
             bwd_choices[:parent_face] = parent_face
             bwd_choices[:child_face] = child_face
-            jacobian_correction = FROM_DIRECTION_AND_PLANE_ROTATION_JACOBIAN_CORRECTION
+            jacobian_correction = GenDirectionalStats.FROM_DIRECTION_AND_PLANE_ROTATION_JACOBIAN_CORRECTION
         end
     else
         # no-op

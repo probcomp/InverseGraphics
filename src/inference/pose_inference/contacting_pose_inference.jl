@@ -43,7 +43,7 @@ function in_place_drift_involution(
             (poses[parent_idx] * S.getContactPlane(object_boxes[parent_idx], parent_face)) \
             (new_pose * S.getContactPlane(object_boxes[idx], child_face)),
         )
-        contact = S.ShapeContact(parent_face, (), child_face, (), pc)
+        contact = S.ShapeContact(parent_face, Real[], child_face, Real[], pc)
         cm = contact_submap_from_shape_contact(contact)
         set_submap!(constraints, (contact_addr(idx)), cm)
 
@@ -62,7 +62,7 @@ function in_place_drift_involution(
                 (new_pose * S.getContactPlane(object_boxes[idx], parent_face)) \
                 (poses[child_idx] * S.getContactPlane(object_boxes[child_idx], child_face)),
             )
-            contact = S.ShapeContact(parent_face, (), child_face, (), pc)
+            contact = S.ShapeContact(parent_face, Real[], child_face, Real[], pc)
             cm = contact_submap_from_shape_contact(contact)
             set_submap!(constraints, contact_addr(child_idx), cm)
         end
@@ -70,7 +70,7 @@ function in_place_drift_involution(
 
     args = get_args(trace)
     argdiffs = map((_) -> NoChange(), args)
-    new_trace, weight, _, _ = Gen.update(trace, args, argdiffs, constraints)
+    new_trace, weight, _ = Gen.update(trace, args, argdiffs, constraints)
     return (new_trace, bwd_choices, weight)
 end
 
