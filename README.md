@@ -1,32 +1,49 @@
 # InverseGraphics
 
 ## Setup 
-```shell
-# Install NVidia CUDA toolkit.  On Ubuntu:
-sudo apt install nvidia-cuda-toolkit
 
-# Download the Julia package and its dependencies
+1. Clone the InverseGraphics Julia package:
+```shell
 git clone git@github.com:probcomp/InverseGraphics.git
 cd InverseGraphics
-julia --project -e 'import Pkg;
-                    Pkg.pkg"dev --local git@github.com:probcomp/MiniGSG.jl.git git@github.com:probcomp/GenDirectionalStats.jl.git git@github.com:probcomp/MeshCatViz.git git@github.com:probcomp/GLRenderer.jl.git";
-                    Pkg.instantiate()'
-
-# Create a Python virtualenv to be used with the project
+```
+2. Setup python3 virtual environment
+```shell
 python3 -m venv venv
 source venv/bin/activate
 pip install --upgrade pip setuptools
-# Rebuild Conda.jl and PyCall so that they link the new Python env
-PYTHON=$(which python) PYCALL_JL_RUNTIME_PYTHON=$(which python) julia --project -e 'import Pkg; Pkg.build("Conda"); Pkg.build("PyCall")'
-
-# Install the Python package
-cd dev/GLRenderer/src/renderer
-python setup.py develop
 pip install -r requirements.txt
-cd ../../../..
 ```
 
-To test that the setup has worked run:
+3. Get the unregistered dependencies:
+```shell
+julia --project -e 'import Pkg;
+                    Pkg.pkg"dev --local git@github.com:probcomp/MiniGSG.jl.git git@github.com:probcomp/GenDirectionalStats.jl.git git@github.com:probcomp/MeshCatViz.git git@github.com:probcomp/GLRenderer.jl.git";
+                    Pkg.instantiate()'
 ```
-julia --project notebooks/test_generative_model.jl
+
+if that doesn't work,
+```shell
+mkdir dev
+cd dev
+git clone git@github.com:probcomp/GenDirectionalStats.jl.git GenDirectionalStats
+git clone git@github.com:probcomp/MeshCatViz.git MeshCatViz
+git clone git@github.com:probcomp/GLRenderer.jl.git GLRenderer
+git clone git@github.com:probcomp/MiniGSG.jl.git MiniGSG
 ```
+then in the Julia REPL package manager (press `]` in REPL):
+```
+dev dev/GenDirectionalStats dev/MeshCatViz dev/GLRenderer dev/MiniGSG
+```
+
+4. Next, instantiate the dependencies by running `instantiate` in the Julia REPL package manager.
+
+5. Run `notebooks/demo.jl` in a jupyter/jupytext notebook. If all cells runs successfully, then the setup is functioning properly.
+
+# Other Issues
+
+If you encounter issues with PyCall referencing the wrong python instance
+```shell
+PYTHON=$(which python) PYCALL_JL_RUNTIME_PYTHON=$(which python) julia --project -e 'import Pkg; Pkg.build("Conda"); Pkg.build("PyCall")'
+```
+
