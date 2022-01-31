@@ -4,6 +4,8 @@ import Pkg; Pkg.activate(".")
 import Pkg; Pkg.develop(path="./dev/GLRenderer")
 import Pkg; Pkg.add(["Revise","PoseComposition", "Rotations","Plots","Images","Gen","Distributions","LinearAlgebra"])
 
+import Pkg; Pkg.add("Plots")
+
 # +
 import Revise
 import GLRenderer
@@ -65,7 +67,7 @@ m3 = GL.mesh_from_voxelized_cloud(GL.voxelize(front_wall, resolution), resolutio
 m4 = GL.mesh_from_voxelized_cloud(GL.voxelize(back_wall, resolution), resolution);
 
 # +
-# Create renderer
+## Create renderer
 renderer = GL.setup_renderer(GL.CameraIntrinsics(
     600, 600,
     300.0, 300.0,
@@ -88,7 +90,7 @@ rgb, depth = GL.gl_render(
     renderer,
     [1,2,3,4],
     [P.IDENTITY_POSE, P.IDENTITY_POSE,P.IDENTITY_POSE,P.IDENTITY_POSE],
-    P.Pose([0.0, -10.0, 0.0], R.RotX(-pi/2))
+    P.Pose([0.0, 10.0, 0.0], R.RotX(pi/2))
     ; colors=wall_colors
 )
 
@@ -168,7 +170,7 @@ room_bounds_uniform_params = [room_width_bounds[1] room_width_bounds[2];room_hei
     )
     
     depth_obs ~ depth_likelihood(depth, depth_likelihood_var)
-    rgb_obs ~ color_likelihood(rgb, 0.01)
+    rgb_obs ~ color_likelihood(rgb, 0.05)
 
     return (pose=pose, rgb=rgb, depth=depth, depth_obs=depth_obs, rgb_obs=rgb_obs)
 end
@@ -241,13 +243,28 @@ function viz_obs(tr)
     cloud = GL.move_points_to_frame_b(cloud, pose)
     PL.scatter!(cloud[1,:], cloud[3,:], aspect_ratio=:equal, label=false, color=I.colorant"cyan")
 end
-    
+
+function viz_obs_lidar(tr)
+    pose = get_pose(tr)
+    depth = get_gen_depth(tr)
+
+    cloud = GL.depth_image_to_point_cloud(depth, camera_intrinsics)
+    cloud = GL.move_points_to_frame_b(cloud, pose)
+    @show pose
+    mx,_,mz = pose.pos
+    @show cloud
+    for (x,y,z) in eachcol(cloud)
+        PL.plot!([x,mx],[z,mz];color=:grey,label=false)
+    end
+end
+
 function viz_trace(tr)
     PL.plot()
     viz_env(;wall_colors=get_wall_colors(tr))
     viz_pose(get_pose(tr))
-    viz_obs(tr)
-    PL.plot!()
+#     viz_obs(tr)
+    viz_obs_lidar(tr)
+    PL.plot!(aspect_ratio = 1, axis=:off, xticks=nothing, yticks=nothing)
 end
 
 function viz_corner(corner_pose)
@@ -264,10 +281,12 @@ end
 # Generate ground truth data from the model. The observations in this trace will be what we condition on
 # and attempt to infer the pose.
 
-wall_colors = [I.colorant"red",I.colorant"green",I.colorant"blue",I.colorant"yellow"]
-wall_colors = [I.colorant"red",I.colorant"red",I.colorant"red",I.colorant"red"]
+wall_colors = [I.colorant"red",I.colorant"blue", I.colorant"green",I.colorant"yellow"]
+# wall_colors = [I.colorant"red",I.colorant"red",I.colorant"red",I.colorant"red"]
 
-trace_ground_truth, w = Gen.generate(slam_model, (room_width_bounds, room_height_bounds, wall_colors, 0.1));
+constraint = Gen.choicemap()
+constraint[pose_addr()] = P.Pose([0.0, 0.0, -2.0], R.RotY(π))
+trace_ground_truth, w = Gen.generate(slam_model, (room_width_bounds, room_height_bounds, wall_colors, 0.1), constraint);
 viz_trace(trace_ground_truth)
 # -
 
@@ -280,13 +299,18 @@ get_pose(trace_ground_truth)
 
 # 1. Sweep over candidate poses
 candidate_poses = [
-    # FILL ME IN
+    P.Pose([x,0.0,z], R.RotY(hd))
+    for x in room_width_bounds[1]:0.2:room_width_bounds[2]
+    ,z in [-2.0]
+    ,hd in [π]
+        
 ];
-
 @show size(candidate_poses)
-
-# 2. Create traces for each of the candidate poses under the generative model. Hint (use Gen.update)
-    # FILL ME IN
+candidate_traces = map(p -> Gen.update(trace_ground_truth, Gen.choicemap(pose_addr() => p))[1], candidate_poses)
+scores = map(Gen.get_score, candidate_traces);
+s = scores
+normalized_s = s .- Gen.logsumexp(s)
+normalized_s_exp = exp.(normalized_s)
 
 # 3. Get score of these traces.
     # FILL ME IN
@@ -298,6 +322,29 @@ candidate_poses = [
     # FILL ME IN
 
 # -
+
+function viz_trace_alpha(trace_ground_truth, candidate_traces, weights)
+    PL.plot()
+    viz_env(;wall_colors=get_wall_colors(trace_ground_truth))
+    for (i, trace) in enumerate(candidate_traces)
+        viz_pose(get_pose(trace), alpha = weights[i])
+    end
+#     viz_obs(trace_ground_truth)
+    PL.plot!(aspect_ratio = 1, axis=:off, xticks=nothing, yticks=nothing)
+end
+
+threshold = 0.05
+mask = normalized_s_exp .> 0.000001
+@show sum(mask)
+viz_trace_alpha(trace_ground_truth, candidate_traces[mask][:], normalized_s_exp[mask][:] .+ 0.5)
+
+# # candidate_poses[mask][:]
+
+normalized_s_exp
+
+sort(normalized_s_exp[:];rev=true)
+
+
 
 # # Part 2 - Naive Inference
 
