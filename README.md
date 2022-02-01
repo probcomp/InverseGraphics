@@ -30,6 +30,8 @@ git clone git@github.com:probcomp/GenDirectionalStats.jl.git GenDirectionalStats
 git clone git@github.com:probcomp/MeshCatViz.git MeshCatViz
 git clone git@github.com:probcomp/GLRenderer.jl.git GLRenderer
 git clone git@github.com:probcomp/MiniGSG.jl.git MiniGSG
+cd ..
+
 ```
 then in the Julia REPL package manager (press `]` in REPL):
 ```
