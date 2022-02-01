@@ -16,18 +16,36 @@ end
 
 V.setup_visualizer()
 
-YCB_DIR = "/home/nishadg/mcs/ThreeDVision.jl/data/ycbv2"
+pwd()
+
+# YCB_DIR = "/home/nishadg/mcs/ThreeDVision.jl/data/ycbv2"
+YCB_DIR = joinpath(dirname(dirname(pwd())),"data")
 world_scaling_factor = 100.0
 id_to_cloud, id_to_shift, id_to_box  = T.load_ycbv_models_adjusted(YCB_DIR, world_scaling_factor);
 all_ids = sort(collect(keys(id_to_cloud)));
 
-SCENE = 55
-IDX = 1000
+SCENE = 48
+IDX = 1
 
 gt_poses, ids, rgb_image, gt_depth_image, cam_pose, original_camera = T.load_ycbv_scene_adjusted(
     YCB_DIR, SCENE, IDX, world_scaling_factor, id_to_shift
 );
 rgb = GL.view_rgb_image(rgb_image;in_255=true)
+
+renderer = GL.setup_renderer(original_camera, GL.TextureMode())
+obj_paths = T.load_ycb_model_obj_file_paths(YCB_DIR)
+texture_paths = T.load_ycb_model_texture_file_paths(YCB_DIR)
+camera = T.scale_down_camera(original_camera, 4)
+for id in all_ids
+    mesh = GL.get_mesh_data_from_obj_file(obj_paths[id];tex_path=texture_paths[id])
+    mesh = T.scale_and_shift_mesh(mesh, world_scaling_factor, id_to_shift[id])
+    GL.load_object!(renderer, mesh)
+end
+
+rgb_data, _ = GL.gl_render(renderer, ids,gt_poses, IDENTITY_POSE)
+GL.view_rgb_image(rgb_data)
+
+
 
 import Plots
 depth_obs_plot = Plots.heatmap(gt_depth_image; c=:thermal,clim=(20.0, 140.0), ylim=(0, 480), xlim=(0, 640),
@@ -47,6 +65,9 @@ for id in all_ids
     GL.load_object!(renderer, v, n, f
     )
 end
+# -
+
+
 
 # +
 idx = 4
