@@ -74,4 +74,20 @@ function in_place_drift_involution(
     return (new_trace, bwd_choices, weight)
 end
 
+function in_place_drift_involution_move(trace, obj_id, pos_var, rot_conc; iterations=1)
+    acceptances = false
+    for _ in 1:iterations
+        trace, acc = Gen.mh(
+            trace,
+            in_place_drift_randomness,
+            (obj_id, pos_var, rot_conc, false),
+            in_place_drift_involution,
+            check = false,
+        )
+        acceptances = acc || acceptances
+    end
+    trace, acceptances
+end
+
+
 export in_place_drift_randomness, in_place_drift_involution
