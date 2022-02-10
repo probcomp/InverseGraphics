@@ -15,27 +15,9 @@ pip install --upgrade pip setuptools
 pip install -r requirements.txt
 ```
 
-3. Get the unregistered dependencies:
-```shell
-julia --project -e 'import Pkg;
-                    Pkg.pkg"dev --local git@github.com:probcomp/MiniGSG.jl.git git@github.com:probcomp/GenDirectionalStats.jl.git git@github.com:probcomp/MeshCatViz.git git@github.com:probcomp/GLRenderer.jl.git";
-                    Pkg.instantiate()'
+3. Register the ProbComp registry in the Julia package manager:
 ```
-
-if that doesn't work,
-```shell
-mkdir dev
-cd dev
-git clone git@github.com:probcomp/GenDirectionalStats.jl.git GenDirectionalStats
-git clone git@github.com:probcomp/MeshCatViz.git MeshCatViz
-git clone git@github.com:probcomp/GLRenderer.jl.git GLRenderer
-git clone git@github.com:probcomp/MiniGSG.jl.git MiniGSG
-cd ..
-
-```
-then in the Julia REPL package manager (press `]` in REPL):
-```
-dev dev/GenDirectionalStats dev/MeshCatViz dev/GLRenderer dev/MiniGSG
+registry add git@github.com:probcomp/ProbCompRegistry.git
 ```
 
 4. Next, instantiate the dependencies by running `instantiate` in the Julia REPL package manager.
