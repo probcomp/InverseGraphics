@@ -76,7 +76,7 @@ function get_unexplained_obs_cloud(trace, radius=1.0)
 
     idxs = NearestNeighbors.inrange(obs_tree, get_gen_cloud(trace), radius)
     valid[unique(vcat(idxs...))] .= false
-    valid
+    obs[:,valid], valid
 end
 
 export get_unexplained_obs_cloud

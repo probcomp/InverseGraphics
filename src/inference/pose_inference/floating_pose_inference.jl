@@ -83,3 +83,34 @@ end
 pose_mixture_move(trace, addr, poses, weights, posVar, rotConc) = mh(trace, propose_pose_mixture, (addr, poses, weights,  posVar, rotConc))
 
 export pose_mixture_move
+
+
+# ICP move
+function icp_move(trace, i, get_cloud_func; iterations=10, unexplained_radius=0.2, crazy_pose=Pose([-100.0,-100.0,-100.0]))
+    # get_cloud_func needs to give the points in the world frame
+    model_params = get_args(trace)
+    cam_pose = trace[:camera_pose]
+
+    addr = floating_pose_addr(i)
+    t, = Gen.update(trace, Gen.choicemap(
+            floating_pose_addr(i) => crazy_pose)
+    )
+    obs_cloud = move_points_to_frame_b(
+        get_unexplained_obs_cloud(t, unexplained_radius)[1], cam_pose)
+
+    refined_pose = trace[addr]
+    refined_pose = icp_object_pose(
+        refined_pose,
+        obs_cloud,
+        get_cloud_func;
+    )
+
+    acceptances = false
+    for _ in 1:iterations
+        trace, acc = pose_mixture_move(
+            trace, addr, [trace[addr], refined_pose], [0.5, 0.5], 0.001, 5000.0
+        )
+        acceptances = acc || acceptances
+    end
+    trace, acceptances, refined_pose
+end

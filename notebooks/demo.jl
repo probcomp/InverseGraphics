@@ -23,7 +23,7 @@ id_to_cloud, id_to_shift, id_to_box  = T.load_ycbv_models_adjusted(YCB_DIR, worl
 all_ids = sort(collect(keys(id_to_cloud)));
 names = T.load_ycb_model_list(YCB_DIR)
 
-IDX = 500
+IDX = 1000
 
 # Load scene data.
 #    gt_poses : Ground truth 6D poses of objects (in the camera frame)
@@ -35,36 +35,6 @@ gt_poses, ids, gt_rgb_image, gt_depth_image, cam_pose, original_camera = T.load_
     YCB_DIR, IDX, world_scaling_factor, id_to_shift
 );
 GL.view_rgb_image(gt_rgb_image;in_255=true)
-
-# +
-# Overlay
-camera = T.scale_down_camera(original_camera, 1)
-renderer = GL.setup_renderer(camera, GL.RGBMode())
-# Add voxelized object models to renderer instance.
-resolution = 0.05
-obj_paths = T.load_ycb_model_obj_file_paths(YCB_DIR)
-for id in all_ids
-    mesh = GL.get_mesh_data_from_obj_file(obj_paths[id])
-    mesh = T.scale_and_shift_mesh(mesh, world_scaling_factor, id_to_shift[id])
-    
-#     cloud = id_to_cloud[id]
-#     mesh = GL.mesh_from_voxelized_cloud(GL.voxelize(cloud, resolution), resolution)
-    GL.load_object!(renderer, mesh)
-end
-
-# +
-colors  = [
-    I.colorant"yellow", I.colorant"cyan", I.colorant"lightgreen",
-    I.colorant"purple", I.colorant"orange",I.colorant"red", 
-]
-rgb_image, depth_image = GL.gl_render(renderer, ids, gt_poses, IDENTITY_POSE; colors=colors)
-
-a = GL.view_rgb_image(rgb_image)
-# -
-
-b = GL.view_rgb_image(gt_rgb_image;in_255=true)
-
-T.mix(a,b, 0.7)
 
 # +
 # Create renderer instance
@@ -95,8 +65,17 @@ V.viz(T.move_points_to_frame_b(c,cam_pose) ./ 10.0)
 depth_image = GL.gl_render(renderer, ids, gt_poses, IDENTITY_POSE)
 GL.view_depth_image(clamp.(depth_image, 0.0, 200.0))
 # -
+# Visualize re-rendered depth image of scene.
+depth_image = GL.gl_render(renderer, ids, map(x->T.get_c_relative_to_a(cam_pose,x),gt_poses), cam_pose)
+GL.view_depth_image(clamp.(depth_image, 0.0, 200.0))
 
+# +
+cloud = GL.depth_image_to_point_cloud(depth_image, camera)
+V.reset_visualizer()
+V.viz(cloud ./5.0; color=I.colorant"black", channel_name=:gen_cloud)
 
+cloud2 = GL.depth_image_to_point_cloud(gt_depth_image, original_camera)
+V.viz(cloud2 ./5.0; color=I.colorant"red", channel_name=:obs_cloud)
 
 # +
 # Model parameters
@@ -159,32 +138,12 @@ V.viz(constraints[T.obs_addr()] ./ 10.0)
 # Generate a trace
 trace, _ = Gen.generate(T.scene, (params,), constraints);
 @show Gen.get_score(trace)
-
 # Visulize initial trace.
 V.reset_visualizer()
 V.viz(T.get_obs_cloud_in_world_frame(trace) ./ 10.0; color=I.colorant"red", channel_name=:obs_cloud)
-# V.viz(T.get_gen_cloud_in_world_frame(trace) ./ 10.0; color=I.colorant"black", channel_name=:gen_cloud)
-
-T.get_obs_cloud_in_world_frame(trace)
+V.viz(T.get_gen_cloud_in_world_frame(trace) ./ 10.0; color=I.colorant"black", channel_name=:gen_cloud)
 
 # +
-# Visulize initial trace.
-V.reset_visualizer()
-gen_cloud = T.get_gen_cloud_in_world_frame(trace) ./ 10.0
-
-V.viz(gen_cloud; color=I.colorant"black", channel_name=:gen_cloud)
-
-for i in 1:size(gen_cloud)[2]
-    V.viz_sphere(gen_cloud[:,i],Symbol("sphere_$(i)"); radius=6 * params.hyperparams.resolution * 2 ./ 10.0,color=I.RGBA(1.0, 0.0, 0.0, 0.05))
-end
-
-# -
-
-
-
-# +
-
-
 for i in 1:num_obj-1
     if !T.isFloating(T.get_structure(trace),i)
         continue
@@ -200,16 +159,20 @@ for i in 1:num_obj-1
         trace, acc = T.pose_flip_move(trace, pose_addr, 1, 1000.0)
         trace, acc = T.pose_flip_move(trace, pose_addr, 2, 1000.0)
         trace, acc = T.pose_flip_move(trace, pose_addr, 3, 1000.0)
-        trace, acc = T.icp_move(trace, pose_addr, 3, 1000.0)
-        trace, acc = T.icp_move(trace, pose_addr, 3, 1000.0)
+
     end
+
+#     get_cloud(p) = T.move_points_to_frame_b(
+#         get_cloud_from_ids_and_poses([ids[i]], [p], cam_pose), cam_pose
+#     )
+#     trace, acc = T.icp_move(trace, i, get_cloud; iterations=3)
 end
 
 possible_scene_graphs = T.get_all_possible_scene_graphs(T.get_num_objects(trace); depth_limit=2)
 scores = [Gen.get_score(T.force_structure(trace,g)) for g in possible_scene_graphs];
 trace, acc = T.full_structure_move(trace, vcat(possible_scene_graphs, 
         [T.get_structure(trace)]), vcat(T.normalize_log_weights(scores)*0.9, [0.1]))
-T.get_edges(trace)
+@show T.get_edges(trace)
 
 for j in 1:T.get_num_objects(trace)-1
     for _ in 1:100
@@ -228,8 +191,6 @@ for j in 1:T.get_num_objects(trace)-1
         trace, _ = Gen.mh(trace, Gen.select(address(:angle)))
     end
 end
-
-›››`
 # -
 
 possible_scene_graphs = T.get_all_possible_scene_graphs(T.get_num_objects(trace); depth_limit=2)
@@ -271,70 +232,3 @@ end
 V.reset_visualizer()
 V.viz(T.get_obs_cloud_in_world_frame(trace) ./ 10.0; color=I.colorant"black", channel_name=:obs_cloud)
 V.viz(T.get_gen_cloud_in_world_frame(trace) ./ 10.0; color=I.colorant"red", channel_name=:gen_cloud)
-
-# +
-
-@gen function tableWithStacksScene(λ)
-  numStacks ~ poisson(λ)
-  g = emptyTableScene()
-  for i in 1:numStacks
-    bottomObj ~ uniform_discrete(possibleBottomObjs)
-    bottomX ~ uniform(tabletop_xmin, tabletop_xmax)
-    bottomY ~ uniform(tabletop_ymin, tabletop_ymax)
-    bottomAngle ~ uniform(0, 2π)
-    topObj ~ uniform_discrete(allObjs)
-    topX ~ uniform(-3, 3)
-    topY ~ uniform(-3, 3)
-    topAngle ~ uniform(0, 2π)
-    setContact!(g, :tabletop, TOP, bottomObj,
-                BOTTOM, bottomX, bottomY, bottomAngle)
-    setContact!(g, bottomObj, TOP, topObj,
-                BOTTOM, topX, topY, topAngle)
-  end
-  return g
-end
-
-
-@gen function penalizedTableWithStacksScene(λ)
-  g = tableWithStacksScene(λ)
-  for (obj1, obj2) in all_pairs(objects(g))
-    if interpenetrates(g, obj1, obj2) mean = 100 else mean = 0 end
-    interpenetrationPenalty[obj1, obj2] ~ normal(mean, 0.01)
-    noisyOcclusionFrac[obj1, obj2] ~ normal(
-         occlusionFrac(g, obj1, obj2), 1.0)
-  end
-end
-
-observations = (
-    interpenetrationPenalty = zero_vector,
-    noisy_occlusion_frac[:sugarBox, :jello] = 0.5
-)
-
-
-
-
-while has_interpenetrating_objs(trace[:sceneGraph])
-  (obj1, obj2) = first(interpenetrating_objs(trace[:sceneGraph]))
-  Gen.mh!(trace, drift_kernel(:scene => (obj2 => :contactX), scale=5,
-                              :scene => (obj2 => :contactY), scale=5))
-end
-
-while !occludes(trace[:sceneGraph], :sugarBox1, :jelloBox2)
-  Gen.mh!(trace, select(:scene => (:jelloBox2, :contactX),
-                        :scene => (:jelloBox2, :contactY)))
-  for iter in 1:10
-    Gen.mh!(trace, drift_kernel(:scene => (:jelloBox2, :contactX), scale=5,
-                                :scene => (:jelloBox2, :contactY), scale=5))
-  end
-end
-
-for iter in 1:20
-  v = gradient(trace, addrs, objective=joint_log_prob)
-  trace[addrs] += stepSizes .* unit(v)
-end
-
-
-
-# -
-
-
