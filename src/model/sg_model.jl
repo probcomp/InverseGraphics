@@ -144,8 +144,9 @@ end
 
 @with_kw struct SceneModelParameters
     boxes::Vector{S.Box}
+    ids::Vector{Int}
     hyperparams::Hyperparams
-    get_cloud_from_poses_and_idx::Function
+    get_cloud::Function
     N::Int
 end
 
@@ -164,8 +165,8 @@ function render_clouds(model_params::SceneModelParameters, scene_graph, camera_p
     # N rendered point clouds
     rendered_clouds = [
         let
-            rendered_point_cloud_in_camera_frame = model_params.get_cloud_from_poses_and_idx(
-                poses, i, camera_pose
+            rendered_point_cloud_in_camera_frame = model_params.get_cloud(
+                poses, model_params.ids, camera_pose, i
             )
             # rendered_point_cloud_in_world_frame = move_points_to_frame_b(rendered_point_cloud_in_camera_frame, camera_pose)
             voxelize(rendered_point_cloud_in_camera_frame, model_params.hyperparams.resolution)

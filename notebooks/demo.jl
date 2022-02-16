@@ -48,7 +48,7 @@ for id in all_ids
     GL.load_object!(renderer, mesh)
 end
 # Helper function to get point cloud from the object ids, object poses, and camera pose
-function get_cloud_from_ids_and_poses(ids, poses, camera_pose)
+function get_cloud(poses, ids, camera_pose)
     depth_image = GL.gl_render(renderer, ids, poses, camera_pose)
     cloud = GL.depth_image_to_point_cloud(depth_image, camera)
     if isnothing(cloud)
@@ -57,18 +57,13 @@ function get_cloud_from_ids_and_poses(ids, poses, camera_pose)
     cloud
 end
 V.reset_visualizer()
-c = get_cloud_from_ids_and_poses(ids, map(x->T.get_c_relative_to_a(cam_pose,x), gt_poses), cam_pose)
+c = get_cloud(map(x->T.get_c_relative_to_a(cam_pose,x), gt_poses), ids, cam_pose)
 V.viz(T.move_points_to_frame_b(c,cam_pose) ./ 10.0)
 # GL.view_depth_image(d)
 
 # Visualize re-rendered depth image of scene.
 depth_image = GL.gl_render(renderer, ids, gt_poses, IDENTITY_POSE)
 GL.view_depth_image(clamp.(depth_image, 0.0, 200.0))
-# -
-# Visualize re-rendered depth image of scene.
-depth_image = GL.gl_render(renderer, ids, map(x->T.get_c_relative_to_a(cam_pose,x),gt_poses), cam_pose)
-GL.view_depth_image(clamp.(depth_image, 0.0, 200.0))
-
 # +
 cloud = GL.depth_image_to_point_cloud(depth_image, camera)
 V.reset_visualizer()
@@ -76,6 +71,9 @@ V.viz(cloud ./5.0; color=I.colorant"black", channel_name=:gen_cloud)
 
 cloud2 = GL.depth_image_to_point_cloud(gt_depth_image, original_camera)
 V.viz(cloud2 ./5.0; color=I.colorant"red", channel_name=:obs_cloud)
+# -
+
+vcat(ids,[1])
 
 # +
 # Model parameters
@@ -93,8 +91,9 @@ hypers = T.Hyperparams(
 
 params = T.SceneModelParameters(
     boxes=vcat([id_to_box[id] for id in ids],[S.Box(40.0,40.0,0.1)]), # Bounding box size of objects
-    get_cloud_from_poses_and_idx=
-    (poses, idx, p) -> get_cloud_from_ids_and_poses(ids, poses[1:end-1], p), # Get cloud function
+    ids=vcat(ids,[-1]),
+    get_cloud=
+    (poses, ids, cam_pose, i) -> get_cloud(poses, ids, cam_pose), # Get cloud function
     hyperparams=hypers,
     N=1 # Number of meshes to sample for pseudomarginalizing out the shape prior.
 );
@@ -131,8 +130,13 @@ for i=1:num_obj-1
    constraints[T.floating_pose_addr(i)] = T.get_c_relative_to_a(cam_pose, dense_poses_reordered[i])
 end
 
+# Generate a trace
+trace, _ = Gen.generate(T.scene, (params,), constraints);
+@show Gen.get_score(trace)
+# Visulize initial trace.
 V.reset_visualizer()
-V.viz(constraints[T.obs_addr()] ./ 10.0)
+V.viz(T.get_obs_cloud_in_world_frame(trace) ./ 10.0; color=I.colorant"red", channel_name=:obs_cloud)
+V.viz(T.get_gen_cloud_in_world_frame(trace) ./ 10.0; color=I.colorant"black", channel_name=:gen_cloud)
 # -
 
 # Generate a trace
@@ -162,10 +166,7 @@ for i in 1:num_obj-1
 
     end
 
-#     get_cloud(p) = T.move_points_to_frame_b(
-#         get_cloud_from_ids_and_poses([ids[i]], [p], cam_pose), cam_pose
-#     )
-#     trace, acc = T.icp_move(trace, i, get_cloud; iterations=3)
+    trace, acc = T.icp_move(trace, i; iterations=10)
 end
 
 possible_scene_graphs = T.get_all_possible_scene_graphs(T.get_num_objects(trace); depth_limit=2)
