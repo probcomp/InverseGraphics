@@ -233,3 +233,5 @@ end
 V.reset_visualizer()
 V.viz(T.get_obs_cloud_in_world_frame(trace) ./ 10.0; color=I.colorant"black", channel_name=:obs_cloud)
 V.viz(T.get_gen_cloud_in_world_frame(trace) ./ 10.0; color=I.colorant"red", channel_name=:gen_cloud)
+
+
