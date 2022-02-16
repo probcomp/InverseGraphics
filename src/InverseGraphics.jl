@@ -25,6 +25,7 @@ include("utils/pose.jl")
 include("utils/pose_utils.jl")
 include("utils/scale_camera.jl")
 include("utils/utils.jl")
+include("utils/table_detection.jl")
 
 include("distributions/distributions.jl")
 
