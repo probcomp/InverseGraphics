@@ -48,11 +48,11 @@ get_depth_image_from_step_metadata(step_metadata::PyObject) = Matrix(last(step_m
 get_rgb_image_from_step_metadata(step_metadata::PyObject) = Int.(numpy.array(last(step_metadata.image_list)))
 
 mcs = PyCall.pyimport("machine_common_sense")
-controller = mcs.create_controller("/Users/nishadgothoskar/GenPRAM_workspace/GenPRAM/assets/config_level1.ini")
+controller = mcs.create_controller("../../../../GenPRAM_workspace/GenPRAM/assets/config_level1.ini")
 
 
 scene_data, status = mcs.load_scene_json_file(
-    "/Users/nishadgothoskar/GenPRAM_workspace/GenPRAM/assets/eval_4_validation/eval_4_validation_shape_constancy_0001_15.json")
+    "../../../../GenPRAM_workspace/GenPRAM/assets/eval_4_validation/eval_4_validation_collision_0001_03.json")
 step_metadata_list = []
 step_metadata = controller.start_scene(scene_data)
 push!(step_metadata_list, step_metadata)
@@ -78,13 +78,65 @@ entities_list = [T.get_entities_from_assignment(c1,T.dbscan_cluster(c1)) for c1 
 
 length.(entities_list)
 
-# +
-t = 148
-c1 = entities_list[t][4]
-c2 = entities_list[t+1][4]
+t = 145
+c1 = entities_list[t][1]
+c2 = entities_list[t+2][1]
 V.reset_visualizer()
 V.viz(c1 ./ 10.0; color=I.colorant"red", channel_name=:h1)
 V.viz(c2 ./ 10.0; color=I.colorant"black", channel_name=:h2)
+
+
+c1 = T.voxelize(c1, 0.1)
+c2 = T.voxelize(c2, 0.1)
+@show size(c1), size(c2)
+V.reset_visualizer()
+V.viz(c1 ./ 10.0; color=I.colorant"red", channel_name=:h1)
+V.viz(c2 ./ 10.0; color=I.colorant"black", channel_name=:h2)
+
+import PyCall
+np = PyCall.pyimport("numpy")
+py_goicp = PyCall.pyimport("py_goicp")
+
+# +
+function normalize_cloud(cloud)
+    mi = minimum(cloud;dims=2)
+    ma = maximum(cloud;dims=2)
+    range = (ma .- mi)
+    range[abs.(range) .< 0.001] .= 1.0
+    cloud = (cloud .- mi) ./ range
+end
+function prep_cloud(cloud)
+    p3dlist = [];
+    for (x,y,z) in eachcol(cloud)
+        pt = py_goicp.POINT3D(x,y,z);
+        push!(p3dlist,pt)
+    end
+    return length(p3dlist), p3dlist
+end
+
+Nm, a_points = prep_cloud(c1)
+Nd, b_points = prep_cloud(c2)
+
+# -
+
+goicp = py_goicp.GoICP();
+goicp.loadModelAndData(Nm, a_points, Nd, b_points);
+goicp.setDTSizeAndFactor(10, 1.0);
+goicp.BuildDT();
+goicp.Register();
+
+goicp.optimalTranslation()
+
+# +
+
+rot = R.RotMatrix{3}(goicp.optimalRotation()); # A python list of 3x3 is returned with the optimal rotation
+translation  = goicp.optimalTranslation()# A python list of 1x3 is returned with the optimal translation
+offset_pose = Pose(translation, rot);
+V.reset_visualizer()
+V.viz(c1 ./ 10.0; color=I.colorant"red", channel_name=:h1)
+V.viz(T.move_points_to_frame_b(c2, offset_pose) ./ 10.0; color=I.colorant"black", channel_name=:h2)
+# -
+
 
 
 
@@ -191,3 +243,9 @@ V.viz(c2 ./ 10.0; color=I.colorant"black", channel_name=:h2)
 
 
 T.voxelize
+
+
+
+
+
+

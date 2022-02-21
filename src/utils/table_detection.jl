@@ -1,3 +1,17 @@
+function find_plane_inliers(cloud, plane_eq; theshold=0.1)
+    inliers = abs.((best_eq[1:3]' * cloud)[:] .+ best_eq[4]) .< theshold
+    mask = fill(false, size(cloud)[2])
+    mask[inliers] .= true
+    cloud[:, mask], mask    
+end
+
+function find_plane(cloud; threshold= 0.1)
+    pyrsc = PyCall.pyimport("pyransac3d")
+    plane1 = pyrsc.Plane()
+    best_eq, _ = plane1.fit(transpose(cloud), threshold)
+    best_eq
+end
+
 function find_table_plane(cloud; max_iters=5)
     pyrsc = PyCall.pyimport("pyransac3d")
     for _ in 1:max_iters
