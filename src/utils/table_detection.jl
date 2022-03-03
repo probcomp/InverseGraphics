@@ -1,8 +1,8 @@
-function find_plane_inliers(cloud, plane_eq; theshold=0.1)
-    inliers = abs.((best_eq[1:3]' * cloud)[:] .+ best_eq[4]) .< theshold
+function find_plane_inliers(cloud, plane_eq; threshold=0.1)
+    inliers = abs.((plane_eq[1:3]' * cloud)[:] .+ plane_eq[4]) .< threshold
     mask = fill(false, size(cloud)[2])
     mask[inliers] .= true
-    cloud[:, mask], mask    
+    cloud[:, mask], mask
 end
 
 function find_plane(cloud; threshold= 0.1)
