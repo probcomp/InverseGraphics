@@ -26,7 +26,7 @@ id_to_cloud, id_to_shift, id_to_box  = T.load_ycbv_models_adjusted(YCB_DIR, worl
 all_ids = sort(collect(keys(id_to_cloud)));
 names = T.load_ycb_model_list(YCB_DIR)
 
-IDX = 400
+IDX = 100
 # Load scene data.
 #    gt_poses : Ground truth 6D poses of objects (in the camera frame)
 #    ids      : object ids (order corresponds to the gt_poses list)
@@ -45,7 +45,9 @@ for id in all_ids
     mesh = T.scale_and_shift_mesh(mesh, world_scaling_factor, id_to_shift[id])
     GL.load_object!(renderer, mesh)
 end
-IDX = 1600
+
+
+IDX = 100
 # Load scene data.
 #    gt_poses : Ground truth 6D poses of objects (in the camera frame)
 #    ids      : object ids (order corresponds to the gt_poses list)

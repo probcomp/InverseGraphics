@@ -1,4 +1,5 @@
 ## import Revise
+import Revise
 import PyCall
 import GLRenderer as GL
 import PoseComposition: Pose, IDENTITY_POSE, IDENTITY_ORN
@@ -25,17 +26,17 @@ camera_intrinsics = GL.CameraIntrinsics(400, 400, 1000.0, 1000.0 , 200.0, 200.0,
 renderer = GL.setup_renderer(camera_intrinsics, GL.DepthMode())
 camera_intrinsics
 
-# box_dims = [0.2, 0.2, 0.2]
-# v,n,f = GL.box_mesh_from_dims(box_dims)
-# GL.load_object!(renderer, v, f)
-# box_box = S.Box(box_dims...)
-# nominal_feature_coords_in_obj_frame = T.get_bbox_corners(box_box)
+box_dims = [0.2, 0.2, 0.2]
+mesh = GL.box_mesh_from_dims(box_dims)
+GL.load_object!(renderer, mesh)
+box_box = S.Box(box_dims...)
+nominal_feature_coords_in_obj_frame = T.get_bbox_corners(box_box)
 
-v,n,f, = renderer.gl_instance.load_obj_parameters(
-    "/home/nishadg/mcs/ThreeDVision.jl/data/ycbv2/models/025_mug/textured_simple.obj")
-v *= 5.0
-GL.load_object!(renderer, v, f)
-nominal_feature_coords_in_obj_frame = reshape([0.32, 0.0, 0.0], (3,1))
+# v,n,f, = renderer.gl_instance.load_obj_parameters(
+#     "/home/nishadg/mcs/ThreeDVision.jl/data/ycbv2/models/025_mug/textured_simple.obj")
+# v *= 5.0
+# GL.load_object!(renderer, v, f)
+# nominal_feature_coords_in_obj_frame = reshape([0.32, 0.0, 0.0], (3,1))
 
 # v,n,f, = renderer.gl_instance.load_obj_parameters(
 #     "/home/nishadg/mcs/ThreeDVision.jl/data/ycbv2/models/011_banana/textured_simple.obj")
@@ -44,19 +45,41 @@ nominal_feature_coords_in_obj_frame = reshape([0.32, 0.0, 0.0], (3,1))
 # nominal_feature_coords_in_obj_frame = reshape([0.12, 0.14, -0.02], (3,1))
 
 V.reset_visualizer()
-V.viz(collect(transpose(v)))
+V.viz(mesh.vertices;channel_name=:black,color=I.colorant"black")
 V.viz(nominal_feature_coords_in_obj_frame;channel_name=:red,color=I.colorant"red")
 # -
 
-cube_pose = Pose(0.0, 0.0, 0.0, IDENTITY_ORN)
+cube_pose = Pose(0.0, 0.0, 0.0, GDS.uniform_rot3())
 camera_pose = Pose(0.0,0.0,-4.0)
 depth_image = GL.gl_render(renderer, [1], [cube_pose], camera_pose);
 cloud = T.move_points_to_frame_b(
     GL.depth_image_to_point_cloud(depth_image, camera_intrinsics), 
     camera_pose
 )
+V.reset_visualizer()
+V.viz(cloud)
+GL.view_depth_image(depth_image)
 
-resolution = 0.015
+# +
+cube_pose = Pose(0.0, 0.0, 0.0, GDS.uniform_rot3())
+camera_pose = Pose(0.0,0.0,-3.0)
+depth_image = GL.gl_render(renderer, [1], [cube_pose], camera_pose);
+#     GL.view_depth_image(depth_image)
+
+feature_coords = T.move_points_to_frame_b(nominal_feature_coords_in_obj_frame, cube_pose)
+valid = T.are_features_visible(feature_coords, depth_image, camera_intrinsics, camera_pose)
+visible_feature_coords = feature_coords[:, valid]
+
+resolution = 0.02
+voxelized_point_cloud = T.voxelize(
+    T.move_points_to_frame_b(
+        GL.depth_image_to_point_cloud(depth_image, camera_intrinsics), 
+        camera_pose
+    )
+, resolution)
+V.reset_visualizer()
+V.viz(voxelized_point_cloud)
+
 
 # +
 training_dataset = []

@@ -22,40 +22,43 @@ world_scaling_factor = 10.0
 id_to_cloud, id_to_shift, id_to_box  = T.load_ycbv_models_adjusted(YCB_DIR, world_scaling_factor);
 all_ids = sort(collect(keys(id_to_cloud)));
 names = T.load_ycb_model_list(YCB_DIR)
-obj_paths = T.load_ycb_model_obj_file_paths(YCB_DIR)
-
-findfirst(names .== "025_mug")
+obj_paths = T.load_ycb_model_obj_file_paths(YCB_DIR);
 
 # +
 # box_dims = [1.0,1.0,1.0]
 # box_box = S.Box(box_dims...)
 # box = GL.box_mesh_from_dims(box_dims)
-id = 14
-@show names[id]
-mesh = GL.get_mesh_data_from_obj_file(obj_paths[id])
-mesh = T.scale_and_shift_mesh(mesh, world_scaling_factor, id_to_shift[id])
 
 w = 500
 camera = GL.CameraIntrinsics(w, w, w, w, w/2.0,w/2.0,0.001, 100.0)
 @show camera
 renderer = GL.setup_renderer(camera, GL.DepthMode())
-GL.load_object!(renderer, mesh)
+
+for id in all_ids
+    mesh = GL.get_mesh_data_from_obj_file(obj_paths[id])
+    mesh = T.scale_and_shift_mesh(mesh, world_scaling_factor, id_to_shift[id])
+    GL.load_object!(renderer, mesh)
+end
+
+# -
+
+d[d .< 3.0]
 
 # +
-## Mug
-feature_1 = reshape([-0.15, 0.0, -0.38],(3,1))
-feature_2 = reshape([0.55, -0.02, -0.0],(3,1))
-feature_3 = reshape([0.3, 0.0, 0.38],(3,1))
-feature_4 = reshape([-0.55, 0.0, 0.38],(3,1))
-feature_5 = reshape([-0.12, -0.40, 0.0],(3,1))
+pose = Pose([0.0, 0.0,Gen.uniform(3.0,5.0)], GDS.uniform_rot3())
 
-
-all_features = [feature_1, feature_2, feature_3, feature_4, feature_5]
+camera_pose = IDENTITY_POSE
+d = GL.gl_render(renderer, [14], [pose], camera_pose);
+c = GL.depth_image_to_point_cloud(d,camera);
+@show size(c)
 V.reset_visualizer()
-V.viz(mesh.vertices;color=I.colorant"black", channel_name=:obj)
-for (i,f) in enumerate(all_features)
-    V.viz_sphere(f, Symbol("h$(i)");color=I.colorant"red", radius=0.02)
-end
+V.viz(c;color=I.colorant"black", channel_name=:h1)
+
+ds = clamp.(d, 0, maximum(d[d .< maximum(d) - 0.1]) + 0.4)
+c = GL.depth_image_to_point_cloud(d,camera);
+@show size(c)
+img = I.colorview(I.Gray, ds ./ maximum(ds))
+
 
 # +
 poses = [
@@ -86,14 +89,10 @@ all_visible_features = [
 map(size, all_visible_features)
 
 
-colors = [I.colorant"red", I.colorant"blue",I.colorant"green",I.colorant"yellow", I.colorant"cyan"]
-
+pixel_coords = GL.point_cloud_to_pixel_coordinates(hcat(all_visible_features...), camera)
 d_copy = GL.view_depth_image(d)
-for (i,f ) in enumerate(all_visible_features)
-    pixel_coords = GL.point_cloud_to_pixel_coordinates(f, camera)
-    for (x,y) in eachcol(pixel_coords)
-       d_copy[y-3:y+3,x-3:x+3] .= colors[i]
-    end
+for (x,y) in eachcol(pixel_coords)
+   d_copy[y-3:y+3,x-3:x+3] .= I.colorant"red"
 end
 d_copy
 
