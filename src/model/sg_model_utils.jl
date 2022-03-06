@@ -59,6 +59,9 @@ end
 function obj_name_from_idx(idx)
     Symbol("obj_", idx)
 end
+function get_camera_pose(trace)
+    trace[camera_pose_addr()]
+end
 
 function get_edges(trace::Gen.Trace)
     collect(LG.edges(get_structure(trace)))

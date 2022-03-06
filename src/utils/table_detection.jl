@@ -9,7 +9,8 @@ function find_plane(cloud; threshold= 0.1)
     pyrsc = PyCall.pyimport("pyransac3d")
     plane1 = pyrsc.Plane()
     best_eq, _ = plane1.fit(transpose(cloud), threshold)
-    best_eq
+    sub_cloud, inliers = find_plane_inliers(cloud, best_eq)
+    best_eq, sub_cloud, inliers
 end
 
 function find_table_plane(cloud; max_iters=5)
