@@ -6,11 +6,11 @@ const voxel_binary_latent_likelihood = VoxelBinaryLatentLikelihood()
 
 function Gen.logpdf(
         ::VoxelBinaryLatentLikelihood, Y::Matrix{Float64}, X::Matrix{Float64},
-        p_outlier::Float64, radius::Float64, bounds::Geometry.Bounds)
+        p_outlier::Float64, radius::Float64, bounds::Tuple)
     size(X, 1) == 3 || error("X must have size 3 × something, each column represents a point.  Got size(X) = $(size(X))")
     size(Y, 1) == 3 || error("Y must have size 3 × something, each column represents a point.  Got size(Y) = $(size(Y))")
-    all((Y .≥ [bounds.xmin, bounds.ymin, bounds.zmin]) .&
-        (Y .≤ [bounds.xmax, bounds.ymax, bounds.zmax])
+    all((Y .≥ [bounds[1], bounds[3], bounds[5]]) .&
+        (Y .≤ [bounds[2], bounds[4], bounds[6]])
        ) || @warn("Some points in Y were out of bounds")
 
     tree = get_tree_from_cloud(Y)
@@ -21,12 +21,12 @@ function Gen.logpdf(
 
     # all_idxs is an array of arrays, where the array all_idxs[i] contains all indices j such that
     # the points X[:,i] and Y[:,j] are within a distance of r units of each other.
-    all_idxs = NearestNeighbors.inrange(tree, X, r)
+    all_idxs = NearestNeighbors.inrange(tree, X, radius)
 
     latent_has_corresponding_point_in_obs = fill(false, m)
     obs_has_no_corresponding_latent = fill(true, n)
 
-    for (i,idxs) in enumerate(all_idxs)
+    for (i,idx) in enumerate(all_idxs)
         if length(idx) > 0
             latent_has_corresponding_point_in_obs[i] = true
         end
@@ -65,7 +65,7 @@ const voxel_binary_latent_likelihood_multi_cloud = VoxelBinaryLatentLikelihoodMu
 
 function Gen.logpdf(
         ::VoxelBinaryLatentLikelihoodMultiCloud, Y::Matrix{Float64}, X::Array{Matrix{Float64}},
-        p_outlier::Float64, radius::Float64, bounds::Geometry.Bounds)
+        p_outlier::Float64, radius::Float64, bounds::Tuple)
    log_pdfs = [logpdf(voxel_binary_latent_likelihood, Y, X[i], p_outlier, radius, bounds) for i in 1:length(X)]
    sum(log_pdfs)
 end
