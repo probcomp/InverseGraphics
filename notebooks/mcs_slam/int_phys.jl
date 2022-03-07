@@ -44,23 +44,27 @@ function CameraIntrinsics(step_metadata::PyCall.PyObject)::GL.CameraIntrinsics
         fx, fy, cx, cy,
         clipping_near, clipping_far)
 end
+numpy = PyCall.pyimport("numpy")
 get_depth_image_from_step_metadata(step_metadata::PyObject) = Matrix(last(step_metadata.depth_map_list))
-get_rgb_image_from_step_metadata(step_metadata::PyObject) = Int.(numpy.array(last(step_metadata.image_list)))
+get_rgb_image_from_step_metadata(step_metadata::PyObject) = Float64.(numpy.array(last(step_metadata.image_list)))
 
 mcs = PyCall.pyimport("machine_common_sense")
 controller = mcs.create_controller("../../../../GenPRAM_workspace/GenPRAM/assets/config_level1.ini")
 
 
 scene_data, status = mcs.load_scene_json_file(
-    "../../../../GenPRAM_workspace/GenPRAM/assets/eval_4_validation/eval_4_validation_collision_0001_03.json")
+    "../../../../GenPRAM_workspace/GenPRAM/assets/eval_4_all/quebec_0002_01.json")
 step_metadata_list = []
 step_metadata = controller.start_scene(scene_data)
 push!(step_metadata_list, step_metadata)
 camera = CameraIntrinsics(step_metadata)
 
 for _ in 1:150
-step_metadata = controller.step("Pass")
-push!(step_metadata_list, step_metadata)
+    step_metadata = controller.step("Pass")
+    if isnothing(step_metadata)
+        break
+    end
+    push!(step_metadata_list, step_metadata)
 end
 
 function subtract_floor_and_back_wall(c, threhsold)
@@ -70,20 +74,104 @@ function subtract_floor_and_back_wall(c, threhsold)
     c
 end
 voxelize_resolution = 0.05
+rgb_images = get_rgb_image_from_step_metadata.(step_metadata_list)
 depth_images = get_depth_image_from_step_metadata.(step_metadata_list)
 obs_clouds = map(x->GL.depth_image_to_point_cloud(x,camera), depth_images);
 obs_clouds = map(x->subtract_floor_and_back_wall(x,0.1), obs_clouds);
 obs_clouds = T.voxelize.(obs_clouds, voxelize_resolution)
 entities_list = [T.get_entities_from_assignment(c1,T.dbscan_cluster(c1)) for c1 in obs_clouds];
 
-length.(entities_list)
-
-t = 145
-c1 = entities_list[t][1]
-c2 = entities_list[t+2][1]
+# +
+t = 94
 V.reset_visualizer()
-V.viz(c1 ./ 10.0; color=I.colorant"red", channel_name=:h1)
-V.viz(c2 ./ 10.0; color=I.colorant"black", channel_name=:h2)
+
+V.viz(obs_clouds[t] ./ 10.0; color=I.colorant"red", channel_name=:h1)
+V.viz(obs_clouds[t+1] ./ 10.0; color=I.colorant"black", channel_name=:h2)
+
+GL.view_rgb_image(rgb_images[t];in_255=true)
+# -
+
+cam = GL.scale_down_camera(camera, 5)
+renderer = GL.setup_renderer(cam, GL.DepthMode());
+e = entities_list[t]
+current_poses = (x -> Pose(x)).(T.centroid.(e))
+centered_entities = [x .- c.pos for (x,c) in zip(e, current_poses)]
+meshes = [
+    GL.mesh_from_voxelized_cloud(x, voxelize_resolution)
+    for x in centered_entities
+];
+for m in meshes
+GL.load_object!(renderer, m)
+end
+
+score_clouds(obs_cloud, gen_cloud) = Gen.logpdf(T.uniform_mixture_from_template, obs_cloud, gen_cloud, 0.001, voxelize_resolution*2, (-100.0, 100.0, -100.0, 100.0,-100.0,100.0))
+@show score_clouds(obs_clouds[t+1], obs_clouds[t])
+@show score_clouds(obs_clouds[t+1], obs_clouds[t+1])
+
+d = GL.gl_render(renderer, collect(1:length(meshes)),current_poses, IDENTITY_POSE)
+GL.view_depth_image(d)
+
+# +
+current_poses = current_poses
+
+sweep = -0.3:0.1:0.3
+translated_poses = vcat(IDENTITY_POSE,[
+    Pose([x,y,0.0])
+    for x in sweep for y in sweep
+])
+
+poses_over_time = []
+
+for t in 94:110
+    for i in 1:length(current_poses)
+        for _ in 1:2
+        current_pose = current_poses[i]
+        proposal_poses = (x -> x*current_pose).(translated_poses);
+        images = [
+            let
+                poses = copy(current_poses)
+                poses[i] = p
+                d = GL.gl_render(renderer, collect(1:length(meshes)),poses, IDENTITY_POSE)
+            end
+            for p in proposal_poses
+        ];
+        clouds = map(x->GL.depth_image_to_point_cloud(x,cam), images);
+        clouds = T.voxelize.(clouds, voxelize_resolution);
+        scores = (x->score_clouds(obs_clouds[t],x)).(clouds);
+        
+        current_poses[i] = proposal_poses[argmax(scores)];
+        end
+    end
+    push!(poses_over_time, (t,copy(current_poses)))
+end
+
+# +
+i = 3
+t, p = poses_over_time[i]
+@show length(p)
+@show length(meshes)
+
+d = GL.gl_render(renderer, collect(1:length(meshes)),p, IDENTITY_POSE)
+
+c = hcat([T.move_points_to_frame_b(x,p) for (x,p) in zip(centered_entities,p)]...)
+V.reset_visualizer()
+
+V.viz(c ./ 10.0; color=I.colorant"red", channel_name=:h1)
+V.viz(obs_clouds[t] ./ 10.0; color=I.colorant"black", channel_name=:h2)
+
+GL.view_depth_image(d)
+
+# +
+GL.set_intrinsics!(renderer, camera)
+
+i = 8
+t, p = poses_over_time[i]
+d = GL.gl_render(renderer, collect(1:length(meshes)),p, IDENTITY_POSE)
+rgb_image = GL.view_rgb_image(rgb_images[t];in_255=true)
+depth_image = GL.view_depth_image(d)
+T.mix(rgb_image, depth_image, 0.5)
+# -
+
 
 
 c1 = T.voxelize(c1, 0.1)
