@@ -24,6 +24,71 @@ all_ids = sort(collect(keys(id_to_cloud)));
 names = T.load_ycb_model_list(YCB_DIR)
 obj_paths = T.load_ycb_model_obj_file_paths(YCB_DIR);
 
+IDX = 1800
+# Load scene data.
+#    gt_poses : Ground truth 6D poses of objects (in the camera frame)
+#    ids      : object ids (order corresponds to the gt_poses list)
+#    rgb_image, gt_depth_image :
+#    cam_pose : 6D pose of camera (in world frame)
+#    original_camera : Camera intrinsics
+gt_poses, ids, gt_rgb_image, gt_depth_image, cam_pose, original_camera = T.load_ycbv_scene_adjusted(
+    YCB_DIR, IDX, world_scaling_factor, id_to_shift
+);
+gt_rgb = GL.view_rgb_image(gt_rgb_image;in_255=true)
+
+renderer = GL.setup_renderer(original_camera, GL.RGBBasicMode())
+for id in all_ids
+    mesh = GL.get_mesh_data_from_obj_file(obj_paths[id])
+    mesh = T.scale_and_shift_mesh(mesh, world_scaling_factor, id_to_shift[id])
+    GL.load_object!(renderer, mesh)
+end
+
+c = I.distinguishable_colors(10)
+rgb,depth = GL.gl_render(renderer, ids, gt_poses, IDENTITY_POSE; colors=c)
+r = GL.view_rgb_image(rgb)
+i = 2
+r = I.convert.(I.RGB, r)
+mask = I.colordiff.(r, c[i]) .< 0.1
+inv_mask = .!(mask)
+@show sum(inv_mask)
+img = copy(gt_rgb)
+img[inv_mask] .*= 0.6
+img
+
+GL.view_depth_image(depth)
+
+renderer = GL.setup_renderer(original_camera, GL.TextureMode())
+tex_paths = T.load_ycb_model_texture_file_paths(YCB_DIR)
+for id in all_ids
+    mesh = GL.get_mesh_data_from_obj_file(obj_paths[id]; tex_path=tex_paths[id])
+    mesh = T.scale_and_shift_mesh(mesh, world_scaling_factor, id_to_shift[id])
+    GL.load_object!(renderer, mesh)
+end
+
+rgb,depth = GL.gl_render(renderer, ids, gt_poses, IDENTITY_POSE; colors=c)
+GL.view_rgb_image(rgb)
+
+all_ids
+
+poses = [Pose([x, y, 20.0], R.RotXYZ(pi,0,0)) for x in -5:2:5, y in -3:2:3][:]
+rgb,depth = GL.gl_render(renderer, collect(1:length(all_ids)), poses[1:21], IDENTITY_POSE)
+GL.view_rgb_image(rgb)
+
+for i in 1:300
+    for j in 1:300
+        @show r[i,j]
+        @show I.colordiff(r[i,j], c[3])
+    end
+end
+
+sum((x -> x.alpha < 0.1).(r))
+
+map(x -> I.colordiff(x,c[3]), r)
+
+c[4]
+
+I.colordiff(r[200,400],c[2]) 
+
 # +
 # box_dims = [1.0,1.0,1.0]
 # box_box = S.Box(box_dims...)
