@@ -9,6 +9,7 @@ import GenDirectionalStats as GDS
 import NearestNeighbors
 import LightGraphs as LG
 import Gen
+import FileIO
 import PyCall
 import PyCall: PyObject
 import Statistics: mean
@@ -49,11 +50,11 @@ get_depth_image_from_step_metadata(step_metadata::PyObject) = Matrix(last(step_m
 get_rgb_image_from_step_metadata(step_metadata::PyObject) = Float64.(numpy.array(last(step_metadata.image_list)))
 
 mcs = PyCall.pyimport("machine_common_sense")
-controller = mcs.create_controller("../../../../GenPRAM_workspace/GenPRAM/assets/config_level1.ini")
+controller = mcs.create_controller("../../../../GenPRAM_workspace/GenPRAM/assets/config_level2.ini")
 
 
 scene_data, status = mcs.load_scene_json_file(
-    "../../../../GenPRAM_workspace/GenPRAM/assets/eval_4_all/quebec_0002_01.json")
+    "../../../../GenPRAM_workspace/GenPRAM/assets/eval_4_all/november_0001_01.json")
 step_metadata_list = []
 step_metadata = controller.start_scene(scene_data)
 push!(step_metadata_list, step_metadata)
@@ -82,7 +83,19 @@ obs_clouds = T.voxelize.(obs_clouds, voxelize_resolution)
 entities_list = [T.get_entities_from_assignment(c1,T.dbscan_cluster(c1)) for c1 in obs_clouds];
 
 # +
-t = 94
+timesteps = collect(1:70);
+t = timesteps[1]
+# t = 90
+V.reset_visualizer()
+
+V.viz(obs_clouds[t] ./ 10.0; color=I.colorant"red", channel_name=:h1)
+V.viz(obs_clouds[t+1] ./ 10.0; color=I.colorant"black", channel_name=:h2)
+
+GL.view_rgb_image(rgb_images[t];in_255=true)
+
+# +
+t = timesteps[end]
+# t = 90
 V.reset_visualizer()
 
 V.viz(obs_clouds[t] ./ 10.0; color=I.colorant"red", channel_name=:h1)
@@ -91,43 +104,67 @@ V.viz(obs_clouds[t+1] ./ 10.0; color=I.colorant"black", channel_name=:h2)
 GL.view_rgb_image(rgb_images[t];in_255=true)
 # -
 
-cam = GL.scale_down_camera(camera, 5)
+score_clouds(obs_cloud, gen_cloud) = Gen.logpdf(T.uniform_mixture_from_template, obs_cloud, gen_cloud, 0.0001, 3*voxelize_resolution, (-100.0, 100.0, -100.0, 100.0,-100.0,100.0))
+@show score_clouds(obs_clouds[t+1], obs_clouds[t])
+@show score_clouds(obs_clouds[t+1], obs_clouds[t+1])
+
+# +
+cam = GL.scale_down_camera(camera, 4)
 renderer = GL.setup_renderer(cam, GL.DepthMode());
+t = timesteps[1]
 e = entities_list[t]
-current_poses = (x -> Pose(x)).(T.centroid.(e))
-centered_entities = [x .- c.pos for (x,c) in zip(e, current_poses)]
+@show length(e)
+start_poses = (x -> Pose(x)).(T.centroid.(e))
+centered_entities = [x .- c.pos for (x,c) in zip(e, start_poses)]
 meshes = [
     GL.mesh_from_voxelized_cloud(x, voxelize_resolution)
     for x in centered_entities
 ];
+
 for m in meshes
 GL.load_object!(renderer, m)
 end
-
-score_clouds(obs_cloud, gen_cloud) = Gen.logpdf(T.uniform_mixture_from_template, obs_cloud, gen_cloud, 0.001, voxelize_resolution*2, (-100.0, 100.0, -100.0, 100.0,-100.0,100.0))
-@show score_clouds(obs_clouds[t+1], obs_clouds[t])
-@show score_clouds(obs_clouds[t+1], obs_clouds[t+1])
-
-d = GL.gl_render(renderer, collect(1:length(meshes)),current_poses, IDENTITY_POSE)
+d = GL.gl_render(renderer, collect(1:length(meshes)),start_poses, IDENTITY_POSE)
 GL.view_depth_image(d)
 
 # +
-current_poses = current_poses
+current_poses = copy(start_poses)
 
-sweep = -0.3:0.1:0.3
-translated_poses = vcat(IDENTITY_POSE,[
-    Pose([x,y,0.0])
-    for x in sweep for y in sweep
-])
 
 poses_over_time = []
 
-for t in 94:110
+for t in timesteps
     for i in 1:length(current_poses)
         for _ in 1:2
+            
+        sweep = -0.3:0.1:0.3
+        translated_poses = vcat(IDENTITY_POSE,[
+            Pose([x,y,0.0])
+            for x in sweep for y in sweep
+        ])
+        rotated_poses = [Pose(zeros(3),R.RotY(ang)) for ang in -0.5:0.1:0.5]
         current_pose = current_poses[i]
-        proposal_poses = (x -> x*current_pose).(translated_poses);
-        images = [
+        proposal_translated_poses = (x -> x*current_pose).(translated_poses);
+        proposal_rotated_poses = (x -> current_pose*x).(rotated_poses)
+        proposal_poses_1 = vcat(proposal_translated_poses, proposal_rotated_poses) 
+            
+        sweep = -0.1:0.1:0.1
+        rotated_translated_poses = vcat((IDENTITY_POSE,IDENTITY_POSE),[
+                (Pose([x,y,0.0]), Pose(zeros(3),R.RotX(ang))) 
+                
+                for x in sweep
+                for y in sweep
+                for ang in -0.2:0.05:0.2])
+            
+        current_pose = current_poses[i]
+        proposal_poses_2 = (x -> x[1]*current_pose*x[2]).(rotated_translated_poses)
+        
+            
+        proposal_poses = vcat(proposal_poses_1, proposal_poses_2)
+        @show length(proposal_poses)
+            
+        println("render")
+        @time images = [
             let
                 poses = copy(current_poses)
                 poses[i] = p
@@ -135,25 +172,35 @@ for t in 94:110
             end
             for p in proposal_poses
         ];
-        clouds = map(x->GL.depth_image_to_point_cloud(x,cam), images);
-        clouds = T.voxelize.(clouds, voxelize_resolution);
-        scores = (x->score_clouds(obs_clouds[t],x)).(clouds);
+        println("point cloud")
+        @time clouds = map(x->GL.depth_image_to_point_cloud(x,cam), images);
+        println("voxelize")
+        @time clouds = T.voxelize.(clouds, voxelize_resolution);
+        println("score")
+        @time scores = (x->score_clouds(obs_clouds[t],x)).(clouds);
+        current_poses[i] = proposal_poses[argmax(scores)]; 
+        end      
         
-        current_poses[i] = proposal_poses[argmax(scores)];
-        end
     end
     push!(poses_over_time, (t,copy(current_poses)))
 end
+# -
+
+        println("hi")
+
 
 # +
-i = 3
-t, p = poses_over_time[i]
-@show length(p)
+i = 10
+t, poses = poses_over_time[i]
+@show length(poses)
 @show length(meshes)
+poses = copy(poses)
+poses = copy(poses)
 
-d = GL.gl_render(renderer, collect(1:length(meshes)),p, IDENTITY_POSE)
 
-c = hcat([T.move_points_to_frame_b(x,p) for (x,p) in zip(centered_entities,p)]...)
+d = GL.gl_render(renderer, collect(1:length(meshes)),poses, IDENTITY_POSE)
+
+c = hcat([T.move_points_to_frame_b(x,p) for (x,p) in zip(centered_entities,poses)]...)
 V.reset_visualizer()
 
 V.viz(c ./ 10.0; color=I.colorant"red", channel_name=:h1)
@@ -162,15 +209,42 @@ V.viz(obs_clouds[t] ./ 10.0; color=I.colorant"black", channel_name=:h2)
 GL.view_depth_image(d)
 
 # +
-GL.set_intrinsics!(renderer, camera)
+# #ICP Exploration
+# get_cloud_func(p,all_poses,idx) = let
+#     poses = copy(all_poses)
+#     poses[idx] = p
+#     d = GL.gl_render(renderer, collect(1:length(meshes)), poses, IDENTITY_POSE)
+#     c = GL.depth_image_to_point_cloud(d,camera)
+#     c = T.voxelize(c, voxelize_resolution);
+# end
+# i=1
+# GL.set_intrinsics!(renderer, camera)
+# new_pose = T.icp_object_pose(p[i], obs_clouds[t] , p->get_cloud_func(p,poses,i));
 
-i = 8
-t, p = poses_over_time[i]
-d = GL.gl_render(renderer, collect(1:length(meshes)),p, IDENTITY_POSE)
-rgb_image = GL.view_rgb_image(rgb_images[t];in_255=true)
-depth_image = GL.view_depth_image(d)
-T.mix(rgb_image, depth_image, 0.5)
+# V.reset_visualizer()
+
+# V.viz(get_cloud_func(new_pose, poses, i) ./ 10.0; color=I.colorant"red", channel_name=:h1)
+# V.viz(obs_clouds[t] ./ 10.0; color=I.colorant"black", channel_name=:h2)
 # -
+
+
+mkdir("video_imgs")
+
+lpad(5,3,"0")
+
+for (i,t) in enumerate(timesteps)
+    _, p = poses_over_time[i]
+    GL.set_intrinsics!(renderer, camera);
+    d = GL.gl_render(renderer, collect(1:length(meshes)),p, IDENTITY_POSE)
+    GL.set_intrinsics!(renderer, cam);
+
+    rgb_image = GL.view_rgb_image(rgb_images[t];in_255=true)
+    depth_image = GL.view_depth_image(d)
+    overlay = T.mix(rgb_image, depth_image, 0.5)
+
+    img = hcat(rgb_image, depth_image, overlay)
+    FileIO.save("video_imgs/large_occluder_$(lpad(i-1,4,"0")).png", img)
+end
 
 
 
