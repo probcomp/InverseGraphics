@@ -26,7 +26,7 @@ id_to_cloud, id_to_shift, id_to_box  = T.load_ycbv_models_adjusted(YCB_DIR, worl
 all_ids = sort(collect(keys(id_to_cloud)));
 names = T.load_ycb_model_list(YCB_DIR)
 
-IDX = 100
+IDX = 900
 # Load scene data.
 #    gt_poses : Ground truth 6D poses of objects (in the camera frame)
 #    ids      : object ids (order corresponds to the gt_poses list)
@@ -38,16 +38,7 @@ gt_poses, ids, gt_rgb_image, gt_depth_image, cam_pose, original_camera = T.load_
 );
 GL.view_rgb_image(gt_rgb_image;in_255=true)
 
-renderer = GL.setup_renderer(original_camera, GL.RGBMode())
-obj_paths = T.load_ycb_model_obj_file_paths(YCB_DIR)
-for id in all_ids
-    mesh = GL.get_mesh_data_from_obj_file(obj_paths[id])
-    mesh = T.scale_and_shift_mesh(mesh, world_scaling_factor, id_to_shift[id])
-    GL.load_object!(renderer, mesh)
-end
-
-
-IDX = 100
+IDX = 1900
 # Load scene data.
 #    gt_poses : Ground truth 6D poses of objects (in the camera frame)
 #    ids      : object ids (order corresponds to the gt_poses list)
@@ -61,8 +52,16 @@ i = GL.view_rgb_image(gt_rgb_image;in_255=true)
 FileIO.save("$(IDX)_real_rgb.png",i)
 i
 
+renderer = GL.setup_renderer(original_camera, GL.RGBMode())
+obj_paths = T.load_ycb_model_obj_file_paths(YCB_DIR)
+for id in all_ids
+    mesh = GL.get_mesh_data_from_obj_file(obj_paths[id])
+    mesh = T.scale_and_shift_mesh(mesh, world_scaling_factor, id_to_shift[id])
+    GL.load_object!(renderer, mesh)
+end
+
 colors = [I.colorant"lightsalmon", I.colorant"goldenrod1",I.colorant"darkseagreen1", I.colorant"hotpink", I.colorant"cadetblue1", I.colorant"navajowhite4", I.colorant"firebrick2"]
-rgb_image,depth_image = GL.gl_render(renderer, ids, gt_poses, IDENTITY_POSE; colors=colors)
+rgb_image,depth_image = GL.gl_render(renderer, ids, gt_poses, IDENTITY_POSE; colors=colors[1:length(ids)])
 i = GL.view_rgb_image(rgb_image)
 FileIO.save("$(IDX)_rendered_rgb.png",i)
 i
@@ -77,6 +76,50 @@ d = clamp.(gt_depth_image, lims...)
 p2 = Plots.heatmap(d; c=:thermal,clim=lims,  ylim=(0, 480), xlim=(0, 640),margin = 0mm,
     yflip=true, aspect_ratio=:equal, legend = :none, yticks=false, xticks=false, xaxis=false, yaxis=false)
 Plots.savefig("$(IDX)_real_depth.png")
+
+# +
+d = clamp.(depth_image, lims...)
+d = map(x->if (x < lims[2]) x + Gen.normal(0.0, 5.0) else x end, d)
+
+p1 = Plots.heatmap(d; c=:thermal, clim=lims, ylim=(0, 480), xlim=(0, 640),margin = 0mm,
+    yflip=true, aspect_ratio=:equal, legend = :none, yticks=false, xticks=false, xaxis=false, yaxis=false)
+Plots.savefig("$(IDX)_rendered_depth_with_noise.png")
+p1
+
+# +
+renderer = GL.setup_renderer(original_camera, GL.RGBMode())
+
+d = clamp.(depth_image, lims...)
+c = GL.depth_image_to_point_cloud(d, original_camera)
+c = c[:, c[3,:] .< 145.0]
+c = map(x -> let
+        v = randn(3)
+        v = sqrt(sum(v.^2))
+        x = x + 0.2 * rand() * v
+    end, c
+    )
+mesh = GL.mesh_from_voxelized_cloud(c, 0.2)
+
+GL.load_object!(renderer, mesh)
+
+
+
+# -
+
+_,new_d = GL.gl_render(renderer, [1], [IDENTITY_POSE], IDENTITY_POSE)
+i = GL.view_depth_image(new_d)
+
+# +
+d = clamp.(new_d, lims...)
+d = map(x->if (x < lims[2]) x + Gen.normal(0.0, 5.0) else x end, d)
+
+p1 = Plots.heatmap(d; c=:thermal, clim=lims, ylim=(0, 480), xlim=(0, 640),margin = 0mm,
+    yflip=true, aspect_ratio=:equal, legend = :none, yticks=false, xticks=false, xaxis=false, yaxis=false)
+Plots.savefig("$(IDX)_rendered_depth_with_noise.png")
+p1
+# -
+
+
 
 
 
