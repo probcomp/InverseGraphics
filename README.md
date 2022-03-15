@@ -17,10 +17,10 @@ pip install -r requirements.txt
 
 3. Register the ProbComp registry in the Julia package manager:
 ```
-registry add git@github.com:probcomp/ProbCompRegistry.git
+registry add git@github.com:probcomp/InverseGraphicsRegistry.git
 ```
 
-4. Next, instantiate the dependencies by running `instantiate` in the Julia REPL package manager.
+4. In the Julia REPL package manager run `activate .` and then `instantiate`
 
 5. Get the YCB-Video data. Download [data](https://www.dropbox.com/s/dhbqmiu8i3mb3lx/ycbv-test.zip?dl=0) (or get [data_small](https://www.dropbox.com/s/ryyeh0jdkcmdpmu/0048.zip?dl=0) if you just want a small subset of the full dataset) and [models](https://www.dropbox.com/s/i4p7hci3kw375wd/models_txts_densefusion_results.zip?dl=0). Extract the contents and place them in the `data` such that the structure looks as follows:
 ```
