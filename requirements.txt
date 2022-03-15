@@ -3,3 +3,4 @@ jupyter
 jupytext
 numpy
 imageio
+opencv-python
