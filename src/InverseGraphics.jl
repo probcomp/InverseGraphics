@@ -1,7 +1,5 @@
 module InverseGraphics
 
-greet() = print("Hello World!")
-
 using Gen
 
 import GLRenderer as GL
@@ -15,6 +13,11 @@ import PyCall
 import LightGraphs as LG
 import MetaGraphs as MG
 import StaticArrays: SVector, @SVector, StaticVector
+
+function __init__()
+    numpy = PyCall.pyimport("numpy")
+    nothing
+end
 
 include("utils/bbox.jl")
 include("utils/clustering.jl")
@@ -39,5 +42,7 @@ include("model/sg_model_utils.jl")
 include("inference/inference.jl")
 
 include("feature_detection/feature_detection.jl")
+
+include("mcs/mcs_utils.jl")
 
 end # module
