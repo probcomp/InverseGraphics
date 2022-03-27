@@ -6,12 +6,12 @@
     if floating_to_sliding
 
         prev_parent_node = world_frame_node_id
-        downstream_nodes = getDownstream(recapitate(structure), Edge(i, prev_parent_node))
+        downstream_nodes = getDownstream(recapitate(structure), LG.Edge(i, prev_parent_node))
 
         # change to sliding, on top of this object, if possible
         probs = zeros(num_objects)
         for j in downstream_nodes
-            if j != nv(structure) + 1
+            if j != LG.nv(structure) + 1
                 probs[j] = 1.0
             end
         end
@@ -29,7 +29,7 @@
         child_face ~ labeled_categorical(S.BOX_SURFACE_IDS, child_face_probs)
     else
         # change to floating
-        prev_parent_node = parent(structure, i)
+        prev_parent_node = LG.parent(structure, i)
         new_parent_node = world_frame_node_id
     end
 
@@ -127,7 +127,7 @@ function is_structure_move_valid(trace, i::Int, parent_idx)
     world_frame_node_id = num_objects + 1
     if floating_to_sliding
         prev_parent_node = world_frame_node_id
-        downstream_nodes = getDownstream(recapitate(structure), Edge(i, prev_parent_node))
+        downstream_nodes = getDownstream(recapitate(structure), LG.Edge(i, prev_parent_node))
         if isnothing(parent_idx)
             return length(downstream_nodes) > 1
         else
@@ -137,7 +137,7 @@ function is_structure_move_valid(trace, i::Int, parent_idx)
     return true
 end
 
-function structure_move(trace, i::Int, parent_idx=nothing; iterations=10)
+function toggle_edge_move(trace, i::Int, parent_idx=nothing; iterations=10)
     acceptances = false
     if is_structure_move_valid(trace, i, parent_idx)
         for _ in 1:iterations

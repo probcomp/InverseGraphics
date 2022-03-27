@@ -14,16 +14,17 @@ try
 catch
     import MeshCatViz as V    
 end
+import ImageView as IV
 
 V.setup_visualizer()
 
-YCB_DIR = joinpath(dirname(pwd()),"data")
+YCB_DIR = joinpath(dirname(dirname(pathof(T))),"data")
 world_scaling_factor = 10.0
 id_to_cloud, id_to_shift, id_to_box  = T.load_ycbv_models_adjusted(YCB_DIR, world_scaling_factor);
 all_ids = sort(collect(keys(id_to_cloud)));
 names = T.load_ycb_model_list(YCB_DIR)
 
-IDX = 1000
+IDX = 200
 
 # Load scene data.
 #    gt_poses : Ground truth 6D poses of objects (in the camera frame)
@@ -34,7 +35,8 @@ IDX = 1000
 gt_poses, ids, gt_rgb_image, gt_depth_image, cam_pose, original_camera = T.load_ycbv_scene_adjusted(
     YCB_DIR, IDX, world_scaling_factor, id_to_shift
 );
-GL.view_rgb_image(gt_rgb_image;in_255=true)
+x = GL.view_rgb_image(gt_rgb_image;in_255=true)
+IV.imshow(x)
 
 # +
 # Create renderer instance
@@ -78,8 +80,8 @@ vcat(ids,[1])
 # +
 # Model parameters
 hypers = T.Hyperparams(
-    slack_dir_conc=1000.0, # Flush Contact parameter of orientation VMF
-    slack_offset_var=0.5, # Variance of zero mean gaussian controlling the distance between planes in flush contact
+    slack_dir_conc=800.0, # Flush Contact parameter of orientation VMF
+    slack_offset_var=0.2, # Variance of zero mean gaussian controlling the distance between planes in flush contact
     p_outlier=0.01, # Outlier probability in point cloud likelihood
     noise=0.1, # Spherical ball size in point cloud likelihood
     resolution=0.06, # Voxelization resolution in point cloud likelihood
@@ -106,8 +108,8 @@ constraints[:p_outlier] = params.hyperparams.p_outlier
 constraints[:noise] = params.hyperparams.noise
 
 # Intialize the graph to have no edges.
-g = T.graph_with_edges(num_obj, [])
-constraints[T.structure_addr()] = g
+empty_graph = T.graph_with_edges(num_obj, [])
+constraints[T.structure_addr()] = empty_graph
 
 # Fix the pose of the table.
 table_pose = Pose(0.0, 0.0, -0.1)
@@ -147,6 +149,8 @@ V.reset_visualizer()
 V.viz(T.get_obs_cloud_in_world_frame(trace) ./ 10.0; color=I.colorant"red", channel_name=:obs_cloud)
 V.viz(T.get_gen_cloud_in_world_frame(trace) ./ 10.0; color=I.colorant"black", channel_name=:gen_cloud)
 
+trace = T.force_structure(trace, empty_graph);
+
 # +
 for i in 1:num_obj-1
     if !T.isFloating(T.get_structure(trace),i)
@@ -169,13 +173,28 @@ for i in 1:num_obj-1
     trace, acc = T.icp_move(trace, i; iterations=10)
 end
 
+# Full graph involutive move. Note this only proposes fully connected graphs.
 possible_scene_graphs = T.get_all_possible_scene_graphs(T.get_num_objects(trace); depth_limit=2)
 scores = [Gen.get_score(T.force_structure(trace,g)) for g in possible_scene_graphs];
 trace, acc = T.full_structure_move(trace, vcat(possible_scene_graphs, 
         [T.get_structure(trace)]), vcat(T.normalize_log_weights(scores)*0.9, [0.1]))
 @show T.get_edges(trace)
 
+# Involutive moves that propose to turn single edges on and off.
+# We first make proposals to consider edges between objects and the table. (the last object is always the table).
+for i in 1:num_obj-1
+    trace, acc = T.toggle_edge_move(trace, i, num_obj);
+end
+for i in 1:num_obj-1
+    trace, acc = T.toggle_edge_move(trace, i);
+end
+@show T.get_edges(trace)
+
 for j in 1:T.get_num_objects(trace)-1
+    if T.isFloating(T.get_structure(trace),j)
+        continue
+    end
+
     for _ in 1:100
         trace, acc = T.in_place_drift_involution_move(trace, j, 0.1, 2000.0)
     end
@@ -192,42 +211,7 @@ for j in 1:T.get_num_objects(trace)-1
         trace, _ = Gen.mh(trace, Gen.select(address(:angle)))
     end
 end
-# -
 
-possible_scene_graphs = T.get_all_possible_scene_graphs(T.get_num_objects(trace); depth_limit=2)
-scores = [Gen.get_score(T.force_structure(trace,g)) for g in possible_scene_graphs];
-trace, acc = T.full_structure_move(trace, vcat(possible_scene_graphs, [T.get_structure(trace)]), vcat(T.normalize_log_weights(scores)*0.9, [0.1]))
-T.get_edges(trace)
-
-for j in 1:T.get_num_objects(trace)-1
-    for _ in 1:100
-        trace, acc = Gen.mh(
-            trace,
-            T.in_place_drift_randomness,
-            (j, 0.1, 2000.0, false),
-            T.in_place_drift_involution,
-            check = false,
-        )
-    end
-    for _ in 1:100
-        trace, acc = Gen.mh(
-            trace,
-            T.in_place_drift_randomness,
-            (j, 0.01, 100.0, false),
-            T.in_place_drift_involution,
-            check = false,
-        )
-    end
-    address(symbol) = T.contact_addr(j, symbol)
-
-    for _ in 1:50
-        trace, _ = T.drift_move(trace, address(:x), 0.4)
-        trace, _ = T.drift_move(trace, address(:y), 0.4)
-        trace, _ = T.drift_move(trace, address(:slack_offset), 0.4)
-        trace, _ = Gen.mh(trace, Gen.select(address(:slack_dir), address(:slack_offset)))
-        trace, _ = Gen.mh(trace, Gen.select(address(:angle)))
-    end
-end
 
 # Visualize final trace.
 V.reset_visualizer()

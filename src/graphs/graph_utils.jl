@@ -1,5 +1,5 @@
 
-isTree(g::LG.AbstractGraph) = nv(g) == ne(g)+1 && is_connected(g)
+isTree(g::LG.AbstractGraph) = LG.nv(g) == LG.ne(g)+1 && LG.is_connected(g)
 isFloating(diforest::LG.SimpleDiGraph, i::Int) = i ∈ S.rootsOfForest(diforest)
 
 export isTree, isFloating
@@ -47,12 +47,12 @@ function getDownstream(tree::LG.SimpleGraph, e::LG.Edge) :: Set{Int}
 end
 
 function _getDownstream!(nodes::Set{Int}, tree::LG.SimpleGraph, e::LG.Edge)
-    i, j = src(e), dst(e)
-    if !((j in neighbors(tree, i)) && (i in neighbors(tree, j)))
+    i, j = LG.src(e), LG.dst(e)
+    if !((j in LG.neighbors(tree, i)) && (i in LG.neighbors(tree, j)))
         error("No edge (i, j)")
     end
     push!(nodes, j)
-    for n in neighbors(tree, j)
+    for n in LG.neighbors(tree, j)
         if n != i
         _getDownstream!(nodes, tree, LG.Edge(j, n))
         end
@@ -61,7 +61,7 @@ end
 
 # Delete the edge from i->j and add an edge  from i->k.
 function replaceEdge(tree::LG.SimpleGraph, i::Int, j::Int, k::Int)
-    @assert has_edge(tree, LG.Edge(i, j))
+    @assert LG.has_edge(tree, LG.Edge(i, j))
     @assert k in getDownstream(tree, LG.Edge(i, j))
     newTree = deepcopy(tree)
     LG.rem_edge!(newTree, i, j)
@@ -72,9 +72,9 @@ end
 # Peform a BFS from a specified node, to assign directions to each of the edges.
 # Then, remove that specified node from the directed graph and return what is left behind.
 function decapitate(tree::LG.SimpleGraph; root::Union{Int,Nothing}=nothing)
-    root = isnothing(root) ? nv(tree) : root
-    diforest = bfs_tree(tree, root)
-    rem_vertex!(diforest, root)
+    root = isnothing(root) ? LG.nv(tree) : root
+    diforest = LG.bfs_tree(tree, root)
+    LG.rem_vertex!(diforest, root)
     diforest
 end
 
@@ -83,12 +83,12 @@ end
 function recapitate(diforest::LG.SimpleDiGraph)
     forestRoots = S.rootsOfForest(diforest)
     tree = LG.SimpleGraph(diforest)
-    add_vertex!(tree)
-    root = nv(tree)
+    LG.add_vertex!(tree)
+    root = LG.nv(tree)
     for forestRoot in forestRoots
         LG.add_edge!(tree, root, forestRoot)
     end
-    @assert ne(tree) == nv(tree) - 1
+    @assert LG.ne(tree) == LG.nv(tree) - 1
     tree
 end
 
