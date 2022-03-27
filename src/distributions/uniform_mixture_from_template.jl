@@ -127,7 +127,7 @@ function Gen.logpdf(
         ::UniformMixtureFromTemplateMultiCloud, Y::Matrix{Float64}, X::Array{Matrix{Float64}},
         p_outlier::Float64, radius::Float64, bounds::Tuple)
    log_pdfs = [logpdf(uniform_mixture_from_template, Y, X[i], p_outlier, radius, bounds) for i in 1:length(X)]
-   sum(log_pdfs)
+   Gen.logsumexp(log_pdfs) - log(length(log_pdfs))
 end
 
 export uniform_mixture_from_template, uniform_mixture_from_template_multi_cloud
