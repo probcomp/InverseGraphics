@@ -27,13 +27,28 @@ controller = mcs.create_controller(joinpath(module_path, "../../../GenPRAM_works
 
 
 scene_data, status = mcs.load_scene_json_file(
-    joinpath(module_path, "../../../GenPRAM_workspace/GenPRAM//assets/eval_4_all/november_0001_01.json"))
-    
+    joinpath(module_path, "../../../GenPRAM_workspace/GenPRAM//assets/eval_4_validation/eval_4_validation_containers_0001_09.json"))
 
 step_metadata_list = []
 step_metadata = controller.start_scene(scene_data)
 push!(step_metadata_list, step_metadata)
 camera = T.CameraIntrinsics(step_metadata)
+
+for _ in 1:36
+    step_metadata = controller.step("RotateRight")
+    if isnothing(step_metadata)
+        break
+    end
+    push!(step_metadata_list, step_metadata)
+end
+
+
+
+
+
+
+
+
 
 for _ in 1:150
     step_metadata = controller.step("Pass")
