@@ -77,6 +77,7 @@ This is because your ssh key is not supporting SHA-2. You need to run `ssh-keyge
 
 - Unclear how to solve this error on Ubuntu 20.04 GCP VM (it can be a bit involved https://forums.gentoo.org/viewtopic-t-1038878-start-0.html):
 
+<img width="1012" alt="Screen Shot 2022-03-28 at 13 59 42" src="https://user-images.githubusercontent.com/1942909/160468427-c3ee09ba-68ad-4741-9643-b10659e4f53e.png">
 
 
 
