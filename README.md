@@ -47,3 +47,34 @@ If you encounter issues with PyCall referencing the wrong python instance
 PYTHON=$(which python) PYCALL_JL_RUNTIME_PYTHON=$(which python) julia --project -e 'import Pkg; Pkg.build("Conda"); Pkg.build("PyCall")'
 ```
 
+Depending on how encryption keys are configured you might have to do below steps (e.g. on GCP's pain Ubuntu VM, you need to manually do the steps below):
+- To enable Julia's package manager to be able to pull code from github repos, you need to activate the ssh-agent, and specifically add your github key:
+```
+eval "$(ssh-agent -s)"
+ssh-add ~/.ssh/<your github key>
+
+```
+- To start an X server on your machine. Please note the monitor being output. It should look like :0 or :1. Another (maybe better way) to do it is to use `startx` but I haven't been able to get that step to work yet on a Google Cloud Project VM with attached display. 
+```
+vncserver -localhost
+# example output:
+# New 'X' desktop is machine:1
+# Starting applications specified in /home/balgobin/.vnc/xstartup
+# Log file is /home/balgobin/.vnc/machine:1.log
+```
+
+- To tell GLFW which display to use (based on output from previous step):
+```
+export DISPLAY=:1
+```
+
+- Unclear how to solve this error on Ubuntu 20.04 GCP VM (it can be a bit involved https://forums.gentoo.org/viewtopic-t-1038878-start-0.html):
+
+
+
+
+
+
+
+
+
