@@ -1,43 +1,47 @@
-# -*- coding: utf-8 -*-
-import Revise
-import GLRenderer as GL
-import Images as I
-import ImageView as IV
-import MiniGSG as S
-import Rotations as R
-import PoseComposition: Pose, IDENTITY_POSE, IDENTITY_ORN
-import InverseGraphics as T
-import NearestNeighbors
-import LightGraphs as LG
-import GenDirectionalStats as GDS
-import Gen
-using Dates
-using UnicodePlots
-using StatsBase
-using Rotations
-using Gen
-using GenInferenceDiagnostics
-using GenSMCGF
-using GenAIDE
-using FileIO
-using CairoMakie
-import MeshCatViz as V
+using Revise
+using Distributed
+process_manager = Distributed.LocalManager(6, true)
+procs = addprocs(process_manager; exeflags="--project")
 
-resolution = 0.8
-box = GL.box_mesh_from_dims(ones(3));
-occluder = GL.box_mesh_from_dims([2.0, 5.0, 0.1]);
-occluder_pose = Pose([0.0, 0.0, 10.0], IDENTITY_ORN)
-intrinsics = GL.CameraIntrinsics();
-intrinsics = GL.scale_down_camera(intrinsics, 7)
-renderer = GL.setup_renderer(intrinsics, GL.DepthMode())
-GL.load_object!(renderer, occluder);
-GL.load_object!(renderer, box);
+@everywhere begin
+    using GLRenderer
+    import Images as I
+    import ImageView as IV
+    import MiniGSG as S
+    import Rotations as R
+    using PoseComposition: Pose, IDENTITY_POSE, IDENTITY_ORN
+    import InverseGraphics as T
+    using NearestNeighbors
+    import LightGraphs as LG
+    import GenDirectionalStats as GDS
+    using Gen
+    using Dates
+    using UnicodePlots
+    using StatsBase
+    using Rotations
+    using GenInferenceDiagnostics
+    using GenSMCGF
+    using GenAIDE
+    using FileIO
+    using CairoMakie
+    import MeshCatViz as V
+
+    resolution = 0.8
+    box = GLRenderer.box_mesh_from_dims(ones(3));
+    occluder = GLRenderer.box_mesh_from_dims([2.0, 5.0, 0.1]);
+    occluder_pose = Pose([0.0, 0.0, 10.0], IDENTITY_ORN)
+    intrinsics = GLRenderer.CameraIntrinsics();
+    intrinsics = GLRenderer.scale_down_camera(intrinsics, 7)
+    renderer = GLRenderer.setup_renderer(intrinsics, GLRenderer.DepthMode())
+    GLRenderer.load_object!(renderer, occluder);
+    GLRenderer.load_object!(renderer, box);
+end
 
 #####
 ##### Model
 #####
 
-@gen function kernel(t, null, 
+@everywhere Gen.@gen function kernel(t, null, 
         positions, rotations, poses, 
         depth_images, voxelized_clouds, obs_clouds)
     if t == 1
@@ -50,12 +54,12 @@ GL.load_object!(renderer, box);
     push!(positions, x)
     push!(rotations, rot)
     object_pose = Pose([x, 0.0, 12.0], rot)
-    depth_image = GL.gl_render(renderer, [1, 2], 
-                               [occluder_pose, object_pose], 
-                               IDENTITY_POSE)
-    rendered_cloud = GL.depth_image_to_point_cloud(depth_image, 
-                                                   intrinsics)
-    voxelized_cloud = GL.voxelize(rendered_cloud, resolution)
+    depth_image = GLRenderer.gl_render(renderer, [1, 2], 
+                                       [occluder_pose, object_pose], 
+                                       IDENTITY_POSE)
+    rendered_cloud = GLRenderer.depth_image_to_point_cloud(depth_image, 
+                                                           intrinsics)
+    voxelized_cloud = GLRenderer.voxelize(rendered_cloud, resolution)
     obs_cloud ~ T.uniform_mixture_from_template(voxelized_cloud,
                                                 0.01, # p_outlier
                                                 resolution * 3,
@@ -67,9 +71,9 @@ GL.load_object!(renderer, box);
     return nothing
 end
 
-unf = Unfold(kernel)
+@everywhere unf = Unfold(kernel)
 
-@gen (static) function model(t)
+@everywhere Gen.@gen function model(t)
     positions = []
     rotations = []
     poses = []
@@ -82,16 +86,16 @@ unf = Unfold(kernel)
     return (; poses, depth_images, voxelized_clouds, obs_clouds)
 end
 
-Gen.@load_generated_functions()
+@everywhere Gen.@load_generated_functions()
 
 #####
 ##### Inference with enumerative proposal
 #####
 
-mixture_of_normals = HomogeneousMixture(normal, [0, 0])
+@everywhere mixture_of_normals = HomogeneousMixture(normal, [0, 0])
 
 # An enumerative proposal over linear translations.
-@gen function initial_proposal(grid_step, chm)
+@everywhere Gen.@gen function initial_proposal(grid_step, chm)
     x_gridded = -5.0 : grid_step : -3.0
     weights = map(x_gridded) do x
         choices = choicemap((:m => 1 => :obs_cloud, chm[:m => 1 => :obs_cloud]),
@@ -106,7 +110,7 @@ mixture_of_normals = HomogeneousMixture(normal, [0, 0])
 end
 
 # An enumerative proposal over linear translations in local grid.
-@gen function transition_proposal(trace, t, grid_step, chm)
+@everywhere Gen.@gen function transition_proposal(trace, t, grid_step, chm)
     prev_chm = get_choices(trace)
     prev = get_choices(trace)[:m => t - 1 => :x]
     x_gridded = (prev - 1.0) : grid_step : (prev + 1.0)
@@ -123,18 +127,28 @@ end
                                          0.01 * ones(length(x_gridded)))
 end
 
-@gen function rejuv_proposal(tr, t::Int)
+@everywhere Gen.@gen function rejuv_proposal(tr, t::Int)
     x_cur = tr[:m => t => :x]
     {:m => t => :x} ~ normal(x_cur, 0.2)
 end
 
-@kern function k1(tr, t::Int)
+@everywhere Gen.@kern function k1(tr, t::Int)
     tr ~ mh(tr, rejuv_proposal, (t, ))
 end
 
-smc_gf = GenSMCGF.SMCGF(model, 
-                        initial_proposal, transition_proposal, 
-                        k1)
+@everywhere smc_gf = GenSMCGF.SMCGF(model, 
+                                    initial_proposal, transition_proposal, 
+                                    k1)
+
+@everywhere struct SMCSpec
+    n_particles::Int
+    n_rejuv::Int
+    grid_step
+end
+
+#####
+#####
+#####
 
 function infer(num_timesteps, obs; 
         grid_step = 0.1, N_particles = 5, N_rejuvenation = 1)
@@ -159,7 +173,6 @@ function infer(num_timesteps, obs;
     rets = [particles[categorical(normalized_weights)] for _ in 1 : length(particles)]
     return rets
 end
-
 
 #####
 ##### SBC
@@ -219,7 +232,6 @@ function run_sbc(N, N_inf, N_particles, num_timesteps)
         for k in 1 : N_inf
             trs, lnw = importance_sampling(model, (num_timesteps, ), obs, N_particles)
             nw = exp.(lnw)
-            @info StatsBase.mean(nw)
             push!(ret, trs[categorical(nw)])
         end
         return ret
@@ -238,7 +250,7 @@ end
 
 function animate_traces_with_gif!(gif, timesteps::Int, 
         population::Vector, name::String)
-    fig = Figure(resolution = (800, 800))
+    fig = Figure(resolution = (1600, 1600))
     ax = Axis(fig[2, 1], xlabel = "x", ylabel = "y")
     xlims!(ax, (-5.0, 5.0))
     ylims!(ax, (0.0, 10.0))
@@ -269,12 +281,6 @@ end
 ##### KLISH
 #####
 
-struct SMCSpec
-    n_particles::Int
-    n_rejuv::Int
-    grid_step
-end
-
 function flatten_to_ticks(v::Vector{SMCSpec})
     map(v) do spec
         repr((spec.n_particles, spec.n_rejuv, spec.grid_step))
@@ -304,7 +310,7 @@ function klish(T::Int, obs::ChoiceMap,
     argdiffs = [(Gen.IntDiff(1), ) for t in 1 : T]
 
     # Setup animation.
-    fig = Figure(resolution = (800, 800))
+    fig = Figure(resolution = (1600, 1600))
     ax = Axis(fig[2, 1], xlabel = "x", ylabel = "y")
     xlims!(ax, (-5.0, 5.0))
     ylims!(ax, (0.0, 10.0))
@@ -347,6 +353,13 @@ function klish(T::Int, obs::ChoiceMap,
     estimates = Dict{SMCSpec, Float64}()
     particles = Dict{Int, Any}()
     search_time_grid = Iterators.product(1 : T, 1 : steps)
+
+    # Parallel compute AIDE estimates.
+    search_prod = map(collect(Iterators.product([(T, gold_standard, )], search_schedule))) do t
+        (t[1]..., t[2])
+    end
+    estimates = Dict(pmap(run_aide, search_prod))
+
     record(fig, name, search_time_grid) do (t, step)
         s = search_schedule[step]
         if haskey(particles, step)
@@ -371,19 +384,8 @@ function klish(T::Int, obs::ChoiceMap,
             ps[] = particles[step]
         end
 
-        if !haskey(estimates, s)
-            @time estimate, _ = aide(smc_gf, (chms, args, argdiffs, 
-                                              gold_proposal_args, args, 
-                                              gold_n_particles, gold_n_rejuv),
-                                     smc_gf, (chms, args, argdiffs, 
-                                              target_proposal_args, args,
-                                              target_n_particles, target_n_rejuv);
-                                     n = aide_iters,
-                                     mp = mq, # Exact inference
-                                     mq = mq)
-            estimates[s] = estimate
-            push!(aide_estimates[], (step, estimate))
-        end
+        estimate = estimates[s]
+        push!(aide_estimates[], (step, estimate))
 
         # Update animations.
         time[] = t
@@ -399,23 +401,59 @@ end
 ##### Generate ground truth
 #####
 
-label = now()
+@everywhere begin
+    label = now()
 
-# Ground truth.
-range = collect(-5.0 : 0.5 : 5.0)
-l = length(range)
-chm = choicemap(((:m => i => :x, x) for (i, x) in enumerate(range))...)
-trace, = generate(model, (l,), chm);
-depth_images = get_retval(trace).depth_images
-x = GL.view_depth_image.(depth_images);
-gif = cat(GL.view_depth_image.(depth_images)...; dims=3);
+    # Ground truth.
+    range = collect(-5.0 : 0.5 : -3.0)
+    l = length(range)
+    chm = choicemap(((:m => i => :x, x) for (i, x) in enumerate(range))...)
+    trace, = generate(model, (l,), chm);
+    depth_images = get_retval(trace).depth_images
+    x = GLRenderer.view_depth_image.(depth_images);
+    gif = cat(GLRenderer.view_depth_image.(depth_images)...; dims=3);
+
+    # Get ground truth.
+    obs = get_choices(trace)
+end
 
 #####
 ##### Visuals
 #####
 
-# Get ground truth.
-obs = get_choices(trace)
+@everywhere function run_aide(arg::Tuple{Int, SMCSpec, SMCSpec})
+    T, gold_standard, s = arg
+    aide_iters = 1
+    mq = 1
+    gold_grid_step = gold_standard.grid_step
+    gold_n_rejuv = gold_standard.n_rejuv
+    gold_n_particles = gold_standard.n_particles
+    chms = map(1 : T) do t
+        addr = :m => t => :obs_cloud
+        choicemap((addr, obs[addr]))
+    end
+    gold_proposal_args = Tuple[(t, gold_grid_step, obs) 
+                               for t in 2 : T]
+    pushfirst!(gold_proposal_args, (0.01, obs))
+    args = [(t, ) for t in 1 : T]
+    argdiffs = [(Gen.IntDiff(1), ) for t in 1 : T]
+    target_grid_step = s.grid_step
+    target_n_particles = s.n_particles
+    target_n_rejuv = s.n_rejuv
+    target_proposal_args = Tuple[(t, target_grid_step, obs) 
+                                 for t in 2 : T]
+    pushfirst!(target_proposal_args, (0.01, obs))
+    estimate, _ = aide(smc_gf, (chms, args, argdiffs, 
+                                gold_proposal_args, args, 
+                                gold_n_particles, gold_n_rejuv),
+                       smc_gf, (chms, args, argdiffs, 
+                                target_proposal_args, args,
+                                target_n_particles, target_n_rejuv);
+                       n = aide_iters,
+                       mp = mq, # Exact inference
+                       mq = mq)
+    return s => estimate
+end
 
 # Diagnose smoothness of point cloud likelihood
 #range = collect(-5.0 : 0.1 : 3.0)
@@ -436,8 +474,11 @@ obs = get_choices(trace)
 mkdir("anims/$(label)")
 
 # KLISH
-gold_standard = SMCSpec(20, 2, 0.01)
-search = [SMCSpec(10, 2, 0.05), SMCSpec(10, 2, 0.1)]
+gold_standard = SMCSpec(5, 5, 0.01)
+search = [SMCSpec(5, 5, 0.05), 
+          SMCSpec(5, 4, 0.05),
+          SMCSpec(5, 3, 0.05),
+          SMCSpec(5, 2, 0.1)]
 estimates = klish(l, obs, gold_standard, search; 
                   aide_iters = 5, mq = 5,
                   name = "anims/$(label)/klish.gif")
