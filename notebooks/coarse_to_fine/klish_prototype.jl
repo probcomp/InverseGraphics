@@ -246,7 +246,7 @@ function animate_traces_with_gif!(gif, timesteps::Int,
     fig = Figure(resolution = (1600, 1600))
     ax = Axis(fig[2, 1], xlabel = "x", ylabel = "y")
     xlims!(ax, (-5.0, 5.0))
-    ylims!(ax, (0.0, 50.0))
+    ylims!(ax, (0.0, 10.0))
     ax_img = Axis(fig[1, 1])
     hidedecorations!(ax)
     xlims!(ax_img, (-5.0, 5.0))
@@ -346,6 +346,7 @@ function klish(T::Int, obs::ChoiceMap,
     scatter!(ax_aide, aide_estimates; markersize = 12)
     steps = length(search_schedule)
 
+    # Get gold traces.
     @time traces = infer(l, obs, gold_mixture_ref; 
                          N_particles = gold_n_particles, 
                          grid_step = gold_grid_step)
@@ -447,9 +448,10 @@ function run_aide(arg::Tuple{Int, SMCSpec, SMCSpec})
         choicemap((addr, obs[addr]))
     end
     gold_proposal_args = Tuple[(t, gold_grid_step, gold_grid_radius,
-                                obs, gold_mixture_ref)
+                                obs, target_mixture_ref)
                                for t in 2 : T]
-    pushfirst!(gold_proposal_args, (gold_grid_step, obs, gold_mixture_ref))
+    pushfirst!(gold_proposal_args, (gold_grid_step, obs, 
+                                    target_mixture_ref))
     args = [(t, ) for t in 1 : T]
     argdiffs = [(Gen.IntDiff(1), ) for t in 1 : T]
     target_grid_step = s.grid_step
@@ -502,7 +504,7 @@ end
 
 # KLISH
 gold_standard = SMCSpec(1, 0.2, 3.0)
-search = [SMCSpec(1, 0.8, 2.0), 
+search = [SMCSpec(1, 0.8, 1.6), 
           SMCSpec(1, 0.4, 1.2),
           SMCSpec(1, 0.6, 1.2)]
 
