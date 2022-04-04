@@ -1,54 +1,54 @@
+# This is an absolutely disgusting notebook.
+# Don't take anything in here (in terms of reusability) seriously.
+# Most of this will be pulled apart.
+
 using Revise
-using Distributed
-process_manager = Distributed.LocalManager(6, true)
-procs = addprocs(process_manager; exeflags="--project")
+using Random
+Random.seed!(314159)
+using GLRenderer
+import Images as I
+import ImageView as IV
+import MiniGSG as S
+import Rotations as R
+using PoseComposition: Pose, IDENTITY_POSE, IDENTITY_ORN
+import InverseGraphics as T
+using NearestNeighbors
+import LightGraphs as LG
+import GenDirectionalStats as GDS
+using Gen
+using Dates
+using UnicodePlots
+using StatsBase
+using Rotations
+using GenInferenceDiagnostics
+using GenSMCGF
+using GenAIDE
+using FileIO
+using CairoMakie
+import MeshCatViz as V
 
-@everywhere begin
-    using GLRenderer
-    import Images as I
-    import ImageView as IV
-    import MiniGSG as S
-    import Rotations as R
-    using PoseComposition: Pose, IDENTITY_POSE, IDENTITY_ORN
-    import InverseGraphics as T
-    using NearestNeighbors
-    import LightGraphs as LG
-    import GenDirectionalStats as GDS
-    using Gen
-    using Dates
-    using UnicodePlots
-    using StatsBase
-    using Rotations
-    using GenInferenceDiagnostics
-    using GenSMCGF
-    using GenAIDE
-    using FileIO
-    using CairoMakie
-    import MeshCatViz as V
-
-    resolution = 0.8
-    box = GLRenderer.box_mesh_from_dims(ones(3));
-    occluder = GLRenderer.box_mesh_from_dims([2.0, 5.0, 0.1]);
-    occluder_pose = Pose([0.0, 0.0, 10.0], IDENTITY_ORN)
-    intrinsics = GLRenderer.CameraIntrinsics();
-    intrinsics = GLRenderer.scale_down_camera(intrinsics, 7)
-    renderer = GLRenderer.setup_renderer(intrinsics, GLRenderer.DepthMode())
-    GLRenderer.load_object!(renderer, occluder);
-    GLRenderer.load_object!(renderer, box);
-end
+resolution = 1.0
+box = GLRenderer.box_mesh_from_dims(ones(3));
+occluder = GLRenderer.box_mesh_from_dims([2.0, 5.0, 0.1]);
+occluder_pose = Pose([0.0, 0.0, 10.0], IDENTITY_ORN)
+intrinsics = GLRenderer.CameraIntrinsics();
+intrinsics = GLRenderer.scale_down_camera(intrinsics, 6)
+renderer = GLRenderer.setup_renderer(intrinsics, GLRenderer.DepthMode())
+GLRenderer.load_object!(renderer, occluder);
+GLRenderer.load_object!(renderer, box);
 
 #####
 ##### Model
 #####
 
-@everywhere Gen.@gen function kernel(t, null, 
+Gen.@gen function kernel(t, null, 
         positions, rotations, poses, 
         depth_images, voxelized_clouds, obs_clouds)
     if t == 1
         x ~ Gen.uniform(-6.0, 6.0)
         rot ~ GDS.uniform_rot3()
     else
-        x ~ Gen.normal(positions[end], 0.5)
+        x ~ Gen.normal(positions[end], 0.8)
         rot ~ GDS.vmf_rot3(rotations[end], 300.0)
     end
     push!(positions, x)
@@ -71,9 +71,9 @@ end
     return nothing
 end
 
-@everywhere unf = Unfold(kernel)
+unf = Unfold(kernel)
 
-@everywhere Gen.@gen function model(t)
+Gen.@gen function model(t)
     positions = []
     rotations = []
     poses = []
@@ -86,86 +86,83 @@ end
     return (; poses, depth_images, voxelized_clouds, obs_clouds)
 end
 
-@everywhere Gen.@load_generated_functions()
-
 #####
 ##### Inference with enumerative proposal
 #####
 
-@everywhere mixture_of_normals = HomogeneousMixture(normal, [0, 0])
+mixture_of_normals = HomogeneousMixture(normal, [0, 0])
+
+gold_mixture_ref = Ref(Dict{Int, Any}())
+target_mixture_ref = Ref(Dict{Int, Any}())
 
 # An enumerative proposal over linear translations.
-@everywhere Gen.@gen function initial_proposal(grid_step, chm)
-    x_gridded = -5.0 : grid_step : -3.0
+Gen.@gen function initial_proposal(grid_step, chm, 
+        mixture_ref::Ref)
+    x_gridded = -5.0 : grid_step : 5.0
     weights = map(x_gridded) do x
-        choices = choicemap((:m => 1 => :obs_cloud, chm[:m => 1 => :obs_cloud]),
+        choices = choicemap((:m => 1 => :obs_cloud, 
+                             chm[:m => 1 => :obs_cloud]),
                             (:m => 1 => :x, x))
         tr, w = generate(model, (1, ), choices)
         w
     end
-    normalized_weights = exp.(weights .- Gen.logsumexp(weights))
-    {:m => 1 => :x} ~ mixture_of_normals(normalized_weights,
-                                         x_gridded,
-                                         0.01 * ones(length(x_gridded)))
+    nw = exp.(weights .- Gen.logsumexp(weights))
+    μ = sum(x_gridded .* nw)
+    covariance = 0.3
+    mixture_ref[][1] = (μ, covariance)
+    {:m => 1 => :x} ~ normal(μ, covariance)
 end
 
 # An enumerative proposal over linear translations in local grid.
-@everywhere Gen.@gen function transition_proposal(trace, t, grid_step, chm)
+Gen.@gen function transition_proposal(trace, t, 
+        grid_step, grid_radius, chm,
+        mixture_ref::Ref)
     prev_chm = get_choices(trace)
     prev = get_choices(trace)[:m => t - 1 => :x]
-    x_gridded = (prev - 1.0) : grid_step : (prev + 1.0)
+    x_gridded = (prev - grid_radius) : grid_step : (prev + grid_radius)
     weights = map(x_gridded) do x
-        choices = choicemap((:m => t => :obs_cloud, chm[:m => t => :obs_cloud]),
-                            (:m => t => :x, x))
-        c = merge(prev_chm, choices)
-        tr, w  = generate(model, (t, ), c)
+        choices = choicemap((:m => 1 => :obs_cloud,
+                             chm[:m => t => :obs_cloud]),
+                            (:m => 1 => :x, x))
+        tr, w  = generate(model, (1, ), choices)
         w
     end
-    normalized_weights = exp.(weights .- Gen.logsumexp(weights))
-    {:m => t => :x} ~ mixture_of_normals(normalized_weights,
-                                         x_gridded,
-                                         0.01 * ones(length(x_gridded)))
+    nw = exp.(weights .- Gen.logsumexp(weights))
+    μ = sum(x_gridded .* nw)
+    covariance = 0.3
+    mixture_ref[][t] = (μ, covariance)
+    {:m => t => :x} ~ normal(μ, covariance)
 end
 
-@everywhere Gen.@gen function rejuv_proposal(tr, t::Int)
-    x_cur = tr[:m => t => :x]
-    {:m => t => :x} ~ normal(x_cur, 0.2)
-end
+smc_gf = GenSMCGF.SMCGF(model, 
+                        initial_proposal, 
+                        transition_proposal)
 
-@everywhere Gen.@kern function k1(tr, t::Int)
-    tr ~ mh(tr, rejuv_proposal, (t, ))
-end
 
-@everywhere smc_gf = GenSMCGF.SMCGF(model, 
-                                    initial_proposal, transition_proposal, 
-                                    k1)
-
-@everywhere struct SMCSpec
+struct SMCSpec
     n_particles::Int
-    n_rejuv::Int
     grid_step
+    grid_radius
 end
 
 #####
 #####
 #####
 
-function infer(num_timesteps, obs; 
-        grid_step = 0.1, N_particles = 5, N_rejuvenation = 1)
-    smc_gf = GenSMCGF.SMCGF(model, 
-                            initial_proposal, transition_proposal, 
-                            k1)
+function infer(num_timesteps, obs, mixture_ref; 
+        grid_step = 0.1, grid_radius = 3.0,
+        N_particles = 5)
     chms = map(1 : num_timesteps) do t
         addr = :m => t => :obs_cloud
         choicemap((addr, obs[addr]))
     end
-    proposal_args = Tuple[(t, grid_step, obs) for t in 2 : num_timesteps]
-    pushfirst!(proposal_args, (0.02, obs))
+    proposal_args = Tuple[(t, grid_step, grid_radius, 
+                           obs, mixture_ref) for t in 2 : num_timesteps]
+    pushfirst!(proposal_args, (grid_step, obs, mixture_ref))
     args = [(t, ) for t in 1 : num_timesteps]
     argdiffs = [(Gen.IntDiff(1), ) for t in 1 : num_timesteps]
     smc_tr = simulate(smc_gf, (chms, args, argdiffs, 
-                               proposal_args, args, 
-                               N_particles, N_rejuvenation))
+                               proposal_args, N_particles))
     particles = smc_tr.population
     log_weights = smc_tr.log_weights
     log_total_weight = Gen.logsumexp(log_weights)
@@ -186,31 +183,27 @@ function _fill_array!(r::QuatRotation{Float64},
     return _fill_array!(Vector(svector), v, d)
 end
 
-function run_msbc(N, N_inf, N_particles, N_rejuvenation, 
-        num_timesteps, grid_step)
+function run_msbc(N, N_inf, N_particles,
+        num_timesteps, grid_step, grid_radius)
     population_msbc = [ simulate(model, (num_timesteps,)) for _ in 1 : N]
     probe_msbc = Gen.select((:m => i => :x for i in 1 : num_timesteps)...)
     obs_msbc = Gen.select((:m => i => :obs_cloud for i in 1 : num_timesteps)...)
     function inference_msbc(obs)
-        smc_gf = GenSMCGF.SMCGF(model, 
-                                initial_proposal, transition_proposal, 
-                                k1)
         chms = map(1 : num_timesteps) do t
             addr = :m => t => :obs_cloud
             choicemap((addr, obs[addr]))
         end
-        proposal_args = Tuple[(t, grid_step, obs) for t in 2 : num_timesteps]
-        pushfirst!(proposal_args, (grid_step, obs))
+        proposal_args = Tuple[(t, grid_step, grid_radius, 
+                               obs, gold_mixture_ref) for t in 2 : num_timesteps]
+        pushfirst!(proposal_args, (grid_step, obs, gold_mixture_ref))
         args = [(t, ) for t in 1 : num_timesteps]
         argdiffs = [(Gen.IntDiff(1), ) for t in 1 : num_timesteps]
-        smc_tr = simulate(smc_gf, (chms, args, argdiffs, 
-                                   proposal_args, args, 
-                                   N_particles, N_rejuvenation))
-        particles = smc_tr.population
-        log_weights = smc_tr.log_weights
-        log_total_weight = Gen.logsumexp(log_weights)
-        normalized_weights = exp.(log_weights .- log_total_weight)
-        rets = [particles[categorical(normalized_weights)] for _ in 1 : length(particles)]
+        rets = []
+        for k in 1 : N_inf
+            smc_tr = simulate(smc_gf, (chms, args, argdiffs, 
+                                       proposal_args, N_particles))
+            push!(rets, smc_tr.chosen_particle)
+        end
         return rets
     end
     summary = GenInferenceDiagnostics.msbc(population_msbc,
@@ -253,7 +246,7 @@ function animate_traces_with_gif!(gif, timesteps::Int,
     fig = Figure(resolution = (1600, 1600))
     ax = Axis(fig[2, 1], xlabel = "x", ylabel = "y")
     xlims!(ax, (-5.0, 5.0))
-    ylims!(ax, (0.0, 10.0))
+    ylims!(ax, (0.0, 50.0))
     ax_img = Axis(fig[1, 1])
     hidedecorations!(ax)
     xlims!(ax_img, (-5.0, 5.0))
@@ -269,10 +262,10 @@ function animate_traces_with_gif!(gif, timesteps::Int,
     ps = @lift(particle_clouds[$time])
     img = @lift(rotr90(gif[:, :, $time]))
     image!(ax_img, img)
-    scatter!(ax, ps; markersize = 6)
+    scatter!(ax, ps; markersize = 12)
     record(fig, name, 1 : timesteps) do t
         time[] = t
-        notify(particle_clouds)
+        notify(ps)
         notify(img)
     end
 end
@@ -283,35 +276,43 @@ end
 
 function flatten_to_ticks(v::Vector{SMCSpec})
     map(v) do spec
-        repr((spec.n_particles, spec.n_rejuv, spec.grid_step))
+        repr((spec.n_particles, spec.grid_step))
     end
 end
 
 function klish(T::Int, obs::ChoiceMap,
         gold_standard::SMCSpec,
         search_schedule::Vector{SMCSpec};
-        aide_iters = 2, mq = 1, name = "")
-    smc_gf = GenSMCGF.SMCGF(model, 
-                            initial_proposal, transition_proposal, 
-                            k1)
+        name = "")
+
+    ground_truth_x = map(1 : T) do t
+        (chm[:m => t => :x], 5.0)
+    end
 
     # Setup gold standard.
     gold_grid_step = gold_standard.grid_step
-    gold_n_rejuv = gold_standard.n_rejuv
+    gold_grid_radius = gold_standard.grid_radius
     gold_n_particles = gold_standard.n_particles
     chms = map(1 : T) do t
         addr = :m => t => :obs_cloud
         choicemap((addr, obs[addr]))
     end
-    gold_proposal_args = Tuple[(t, gold_grid_step, obs) 
+    gold_proposal_args = Tuple[(t, gold_grid_step, gold_grid_radius,
+                                obs, gold_mixture_ref)
                                for t in 2 : T]
-    pushfirst!(gold_proposal_args, (0.01, obs))
+    pushfirst!(gold_proposal_args, (gold_grid_step, obs, 
+                                    gold_mixture_ref))
     args = [(t, ) for t in 1 : T]
     argdiffs = [(Gen.IntDiff(1), ) for t in 1 : T]
 
     # Setup animation.
-    fig = Figure(resolution = (1600, 1600))
-    ax = Axis(fig[2, 1], xlabel = "x", ylabel = "y")
+    fig = Figure(resolution = (1300, 1300), fontsize = 34)
+    ax_mix_hist = Axis(fig[2, 1], ylabel = "proposal density", 
+                       labelsize=40)
+    hidexdecorations!(ax_mix_hist)
+    xlims!(ax_mix_hist, (-5.0, 5.0))
+    ylims!(ax_mix_hist, (0.0, 3.0))
+    ax = Axis(fig[3, 1], xlabel = "x", ylabel = "y", labelsize=34)
     xlims!(ax, (-5.0, 5.0))
     ylims!(ax, (0.0, 10.0))
     ax_img = Axis(fig[1, 1])
@@ -320,26 +321,35 @@ function klish(T::Int, obs::ChoiceMap,
     ylims!(ax_img, (0.0, 10.0))
     hidedecorations!(ax_img)
     ax_aide = Axis(fig[:, 2], xlabel = "search sequence", 
-                   ylabel = "AIDE estimate")
-    xlims!(ax_aide, (0, length(search_schedule)))
+                   ylabel = "AIDE estimate", labelsize=34)
+    xlims!(ax_aide, (0, length(search_schedule) + 1))
     ax_aide.xticks = (1 : length(search_schedule), 
                       flatten_to_ticks(search_schedule))
-    ylims!(ax_aide, (-5.0, 10.0))
+    ylims!(ax_aide, (0.0, 22.0))
 
     time = Observable(1)
     img = @lift(rotr90(gif[:, :, $time]))
     aide_estimates = Observable(Tuple{Int, Float64}[])
+    target_mix_hist = Observable(Float64[1.0])
+    gold_mix_hist = Observable(Float64[1.0])
+    hist!(ax_mix_hist, target_mix_hist; bins = 30, 
+          normalization = :pdf, color = :red)
+    hist!(ax_mix_hist, gold_mix_hist; bins = 30, 
+          normalization = :pdf, color = :blue)
     image!(ax_img, img)
     ps = Ref(Vector{Tuple{Float64, Float64}}[[(0.0, 5.0)]])
     particle_clouds = @lift(ps[][$time])
-    scatter!(ax, particle_clouds; markersize = 6, color = :red)
-    scatter!(ax_aide, aide_estimates)
+    gt_particle = @lift(ground_truth_x[$time])
+    scatter!(ax, particle_clouds; markersize = 12, color = :red)
+    scatter!(ax, gt_particle; marker = :star5,
+             markersize = 17, color = :black)
+    scatter!(ax_aide, aide_estimates; markersize = 12)
     steps = length(search_schedule)
 
-    @time traces = infer(l, obs; 
+    @time traces = infer(l, obs, gold_mixture_ref; 
                          N_particles = gold_n_particles, 
-                         N_rejuvenation = gold_n_rejuv, 
                          grid_step = gold_grid_step)
+
     gold_particles = map(1 : T) do t
         map(traces) do tr
             chm = get_choices(tr)
@@ -347,7 +357,7 @@ function klish(T::Int, obs::ChoiceMap,
         end
     end
     gold_particle_clouds = @lift(gold_particles[$time])
-    scatter!(ax, gold_particle_clouds; markersize = 6, color = :blue)
+    scatter!(ax, gold_particle_clouds; markersize = 12, color = :blue)
 
     # Iteratively tune.
     estimates = Dict{SMCSpec, Float64}()
@@ -358,7 +368,8 @@ function klish(T::Int, obs::ChoiceMap,
     search_prod = map(collect(Iterators.product([(T, gold_standard, )], search_schedule))) do t
         (t[1]..., t[2])
     end
-    estimates = Dict(pmap(run_aide, search_prod))
+
+    @time estimates = Dict(map(run_aide, search_prod))
 
     record(fig, name, search_time_grid) do (t, step)
         s = search_schedule[step]
@@ -366,14 +377,11 @@ function klish(T::Int, obs::ChoiceMap,
             ps[] = particles[step]
         else
             target_grid_step = s.grid_step
+            target_grid_radius = s.grid_radius
             target_n_particles = s.n_particles
-            target_n_rejuv = s.n_rejuv
-            target_proposal_args = Tuple[(t, target_grid_step, obs) 
-                                         for t in 2 : T]
-            pushfirst!(target_proposal_args, (0.01, obs))
-            @time trs = infer(T, obs; 
+            @time trs = infer(T, obs, target_mixture_ref; 
                               N_particles = target_n_particles, 
-                              N_rejuvenation = target_n_rejuv,
+                              grid_radius = target_grid_radius,
                               grid_step = target_grid_step)
             particles[step] = map(1 : T) do t
                 map(trs) do tr
@@ -386,12 +394,17 @@ function klish(T::Int, obs::ChoiceMap,
 
         estimate = estimates[s]
         push!(aide_estimates[], (step, estimate))
+        gold_mix_hist[] = [normal(gold_mixture_ref[][t]...) for _ in 1 : 10000]
+        target_mix_hist[] = [normal(target_mixture_ref[][t]...) for _ in 1 : 10000]
 
         # Update animations.
         time[] = t
+        notify(gt_particle)
         notify(particle_clouds)
         notify(gold_particle_clouds)
         notify(aide_estimates)
+        notify(target_mix_hist)
+        notify(gold_mix_hist)
         notify(img)
     end
     return estimates
@@ -401,92 +414,102 @@ end
 ##### Generate ground truth
 #####
 
-@everywhere begin
-    label = now()
+label = now()
 
-    # Ground truth.
-    range = collect(-5.0 : 0.5 : -3.0)
-    l = length(range)
-    chm = choicemap(((:m => i => :x, x) for (i, x) in enumerate(range))...)
-    trace, = generate(model, (l,), chm);
-    depth_images = get_retval(trace).depth_images
-    x = GLRenderer.view_depth_image.(depth_images);
-    gif = cat(GLRenderer.view_depth_image.(depth_images)...; dims=3);
-
-    # Get ground truth.
-    obs = get_choices(trace)
+# Ground truth.
+range = collect(-5.0 : 0.5 : 5.0)
+range = map(range) do r
+    normal(r, 0.2)
 end
+l = length(range)
+chm = choicemap(((:m => i => :x, x) for (i, x) in enumerate(range))...)
+trace, = generate(model, (l,), chm);
+depth_images = get_retval(trace).depth_images
+x = GLRenderer.view_depth_image.(depth_images);
+gif = cat(GLRenderer.view_depth_image.(depth_images)...; dims=3);
+
+# Get ground truth.
+obs = get_choices(trace)
 
 #####
 ##### Visuals
 #####
 
-@everywhere function run_aide(arg::Tuple{Int, SMCSpec, SMCSpec})
+function run_aide(arg::Tuple{Int, SMCSpec, SMCSpec})
     T, gold_standard, s = arg
-    aide_iters = 1
+    aide_iters = 5
     mq = 1
     gold_grid_step = gold_standard.grid_step
-    gold_n_rejuv = gold_standard.n_rejuv
+    gold_grid_radius = gold_standard.grid_radius
     gold_n_particles = gold_standard.n_particles
     chms = map(1 : T) do t
         addr = :m => t => :obs_cloud
         choicemap((addr, obs[addr]))
     end
-    gold_proposal_args = Tuple[(t, gold_grid_step, obs) 
+    gold_proposal_args = Tuple[(t, gold_grid_step, gold_grid_radius,
+                                obs, gold_mixture_ref)
                                for t in 2 : T]
-    pushfirst!(gold_proposal_args, (0.01, obs))
+    pushfirst!(gold_proposal_args, (gold_grid_step, obs, gold_mixture_ref))
     args = [(t, ) for t in 1 : T]
     argdiffs = [(Gen.IntDiff(1), ) for t in 1 : T]
     target_grid_step = s.grid_step
+    target_grid_radius = s.grid_radius
     target_n_particles = s.n_particles
-    target_n_rejuv = s.n_rejuv
-    target_proposal_args = Tuple[(t, target_grid_step, obs) 
+    target_proposal_args = Tuple[(t, target_grid_step, 
+                                  target_grid_radius,
+                                  obs, target_mixture_ref)
                                  for t in 2 : T]
-    pushfirst!(target_proposal_args, (0.01, obs))
+    pushfirst!(target_proposal_args, (target_grid_step, obs, 
+                                      target_mixture_ref))
     estimate, _ = aide(smc_gf, (chms, args, argdiffs, 
-                                gold_proposal_args, args, 
-                                gold_n_particles, gold_n_rejuv),
+                                gold_proposal_args, gold_n_particles),
                        smc_gf, (chms, args, argdiffs, 
-                                target_proposal_args, args,
-                                target_n_particles, target_n_rejuv);
+                                target_proposal_args, target_n_particles);
                        n = aide_iters,
-                       mp = mq, # Exact inference
+                       mp = mq,
                        mq = mq)
     return s => estimate
 end
 
 # Diagnose smoothness of point cloud likelihood
-#range = collect(-5.0 : 0.1 : 3.0)
-#obs = get_choices(trace)
-#chms = map(range) do x
-#    obs_addr = :m => 1 => :obs_cloud
-#    choicemap((:m => 1 => :x, x),
-#              (obs_addr, obs[obs_addr]))
-#end
-#
-#weights = map(chms) do chm
-#    tr, w = generate(model, (1, ), chm)
-#    w
-#end
-#normalized_weights = exp.(weights .- Gen.logsumexp(weights))
-#display(UnicodePlots.barplot(collect(range), normalized_weights))
+range = collect(-5.0 : 0.6 : 5.0)
+obs = get_choices(trace)
+chms = map(range) do x
+    obs_addr = :m => 1 => :obs_cloud
+    choicemap((:m => 1 => :x, x),
+              (obs_addr, obs[obs_addr]))
+end
+
+weights = map(chms) do chm
+    tr, w = generate(model, (1, ), chm)
+    w
+end
+normalized_weights = exp.(weights .- Gen.logsumexp(weights))
+display(UnicodePlots.barplot(collect(range), normalized_weights))
 
 mkdir("anims/$(label)")
 
+# Animation
+@info "Tracking animations."
+for k in 1 : 8
+    @time particles = infer(l, obs, gold_mixture_ref; 
+                            N_particles = 1, 
+                            grid_radius = 3.0,
+                            grid_step = 0.2)
+    animate_traces_with_gif!(gif, l, particles, 
+                             "anims/$(label)/1d_occluder_particles_$k.gif")
+end
+
 # KLISH
-gold_standard = SMCSpec(5, 5, 0.01)
-search = [SMCSpec(5, 5, 0.05), 
-          SMCSpec(5, 4, 0.05),
-          SMCSpec(5, 3, 0.05),
-          SMCSpec(5, 2, 0.1)]
-estimates = klish(l, obs, gold_standard, search; 
-                  aide_iters = 5, mq = 5,
+gold_standard = SMCSpec(1, 0.2, 3.0)
+search = [SMCSpec(1, 0.8, 2.0), 
+          SMCSpec(1, 0.4, 1.2),
+          SMCSpec(1, 0.6, 1.2)]
+
+@info "KLISH animation."
+estimates = klish(l, obs, 
+                  gold_standard, search; 
                   name = "anims/$(label)/klish.gif")
 
-# Animation
-#@time particles = infer(l, obs; 
-#                        N_particles = 50, N_rejuvenation = 3, 
-#                        grid_step = 0.05)
-#
-#animate_traces_with_gif!(gif, l, particles, 
-#                         "anims/$(label)/1d_occluder_particles.gif")
+@info "MSBC"
+run_msbc(500, 40, 1, l, 0.2, 3.0)
