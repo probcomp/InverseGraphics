@@ -243,7 +243,12 @@ end
 
 function animate_traces_with_gif!(gif, timesteps::Int, 
         population::Vector, name::String)
-    fig = Figure(resolution = (1600, 1600))
+    fig = Figure(resolution = (1300, 1300), fontsize = 34)
+    ax_mix_hist = Axis(fig[2, 1], ylabel = "proposal density", 
+                       labelsize = 48)
+    hidexdecorations!(ax_mix_hist)
+    xlims!(ax_mix_hist, (-5.0, 5.0))
+    ylims!(ax_mix_hist, (0.0, 3.0))
     ax = Axis(fig[2, 1], xlabel = "x", ylabel = "y")
     xlims!(ax, (-5.0, 5.0))
     ylims!(ax, (0.0, 10.0))
@@ -261,9 +266,14 @@ function animate_traces_with_gif!(gif, timesteps::Int,
     time = Observable(1)
     ps = @lift(particle_clouds[$time])
     img = @lift(rotr90(gif[:, :, $time]))
+    gold_mix_hist = Observable(Float64[1.0])
+    hist!(ax_mix_hist, gold_mix_hist; bins = 30, 
+          normalization = :pdf, color = :gold4)
     image!(ax_img, img)
-    scatter!(ax, ps; markersize = 12)
+    scatter!(ax, ps; markersize = 14, color = :gold4)
     record(fig, name, 1 : timesteps) do t
+        gold_mix_hist[] = [normal(gold_mixture_ref[][t]...) 
+                           for _ in 1 : 10000]
         time[] = t
         notify(ps)
         notify(img)
@@ -312,7 +322,7 @@ function klish(T::Int, obs::ChoiceMap,
     hidexdecorations!(ax_mix_hist)
     xlims!(ax_mix_hist, (-5.0, 5.0))
     ylims!(ax_mix_hist, (0.0, 3.0))
-    ax = Axis(fig[3, 1], xlabel = "x", ylabel = "y", labelsize=34)
+    ax = Axis(fig[2, 1], xlabel = "x")
     xlims!(ax, (-5.0, 5.0))
     ylims!(ax, (0.0, 10.0))
     ax_img = Axis(fig[1, 1])
@@ -321,11 +331,10 @@ function klish(T::Int, obs::ChoiceMap,
     ylims!(ax_img, (0.0, 10.0))
     hidedecorations!(ax_img)
     ax_aide = Axis(fig[:, 2], xlabel = "search sequence", 
-                   ylabel = "AIDE estimate", labelsize=34)
+                   ylabel = "(scaled) AIDE estimate", labelsize=34)
     xlims!(ax_aide, (0, length(search_schedule) + 1))
     ax_aide.xticks = (1 : length(search_schedule), 
                       flatten_to_ticks(search_schedule))
-    ylims!(ax_aide, (0.0, 22.0))
 
     time = Observable(1)
     img = @lift(rotr90(gif[:, :, $time]))
@@ -333,17 +342,17 @@ function klish(T::Int, obs::ChoiceMap,
     target_mix_hist = Observable(Float64[1.0])
     gold_mix_hist = Observable(Float64[1.0])
     hist!(ax_mix_hist, target_mix_hist; bins = 30, 
-          normalization = :pdf, color = :red)
-    hist!(ax_mix_hist, gold_mix_hist; bins = 30, 
           normalization = :pdf, color = :blue)
+    hist!(ax_mix_hist, gold_mix_hist; bins = 30, 
+          normalization = :pdf, color = :gold4)
     image!(ax_img, img)
     ps = Ref(Vector{Tuple{Float64, Float64}}[[(0.0, 5.0)]])
     particle_clouds = @lift(ps[][$time])
     gt_particle = @lift(ground_truth_x[$time])
-    scatter!(ax, particle_clouds; markersize = 12, color = :red)
+    scatter!(ax, particle_clouds; markersize = 14, color = :blue)
     scatter!(ax, gt_particle; marker = :star5,
              markersize = 17, color = :black)
-    scatter!(ax_aide, aide_estimates; markersize = 12)
+    scatter!(ax_aide, aide_estimates; markersize = 14)
     steps = length(search_schedule)
 
     # Get gold traces.
@@ -358,7 +367,7 @@ function klish(T::Int, obs::ChoiceMap,
         end
     end
     gold_particle_clouds = @lift(gold_particles[$time])
-    scatter!(ax, gold_particle_clouds; markersize = 12, color = :blue)
+    scatter!(ax, gold_particle_clouds; markersize = 14, color = :gold4)
 
     # Iteratively tune.
     estimates = Dict{SMCSpec, Float64}()
@@ -371,6 +380,13 @@ function klish(T::Int, obs::ChoiceMap,
     end
 
     @time estimates = Dict(map(run_aide, search_prod))
+
+    est_min = minimum(values(estimates))
+    est_max = maximum(values(estimates))
+    for (k, v) in estimates
+        estimates[k] = (v - est_min) / (est_max - est_min)
+    end
+    ylims!(ax_aide, (0.0, 1.2))
 
     record(fig, name, search_time_grid) do (t, step)
         s = search_schedule[step]
@@ -438,8 +454,8 @@ obs = get_choices(trace)
 
 function run_aide(arg::Tuple{Int, SMCSpec, SMCSpec})
     T, gold_standard, s = arg
-    aide_iters = 5
-    mq = 1
+    aide_iters = 50
+    mq = 10
     gold_grid_step = gold_standard.grid_step
     gold_grid_radius = gold_standard.grid_radius
     gold_n_particles = gold_standard.n_particles
@@ -504,7 +520,7 @@ end
 
 # KLISH
 gold_standard = SMCSpec(1, 0.2, 3.0)
-search = [SMCSpec(1, 0.8, 1.6), 
+search = [SMCSpec(1, 0.6, 1.8), 
           SMCSpec(1, 0.4, 1.2),
           SMCSpec(1, 0.6, 1.2)]
 
