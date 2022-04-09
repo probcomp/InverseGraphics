@@ -27,16 +27,50 @@ renderer = GL.setup_renderer(intrinsics, GL.DepthMode())
 GL.load_object!(renderer, occluder);
 GL.load_object!(renderer, box);
 
+resolution = 0.05
+
 # Example render
 occluder_pose = Pose([0.0, 0.0, 10.0], IDENTITY_ORN)
-object_pose = Pose([5.0, 0.0, 12.0], IDENTITY_ORN)
+object_pose = Pose([0.0, 0.0, 12.0], IDENTITY_ORN)
 i = GL.gl_render(renderer, [1, 2], [occluder_pose, object_pose], IDENTITY_POSE);
 x = GL.view_depth_image(i);
+rendered_cloud = GL.depth_image_to_point_cloud(i, intrinsics);
+gt_cloud = GL.voxelize(rendered_cloud, resolution)
 IV.imshow(x);
-c = GL.depth_image_to_point_cloud(i, intrinsics);
-V.viz(c)
+V.viz(gt_cloud)
 
-resolution = 0.05
+# lets run an enumeration to sanity check our setup and point cloud likelihood.
+poses = [Pose([x, 0.0, 12.0], IDENTITY_ORN) for x in -5.0:0.1:5.0]
+depth_images = [
+    GL.gl_render(renderer, [1, 2], [occluder_pose, object_pose], IDENTITY_POSE)
+    for object_pose in poses
+];
+IV.imshow(GL.view_depth_image(depth_images[1]));
+
+scores = [
+    let 
+        rendered_cloud = GL.depth_image_to_point_cloud(depth_image, intrinsics)
+        voxelized_cloud = GL.voxelize(rendered_cloud, resolution)
+        Gen.logpdf(
+            T.uniform_mixture_from_template, gt_cloud, voxelized_cloud,
+            0.01, # p_outlier
+            resolution * 2,
+            (-100.0, 100.0, -100.0, 100.0, -100.0, 100.0)
+        )
+    end
+    for depth_image in depth_images
+];
+scores =  scores .- Gen.logsumexp(scores);
+scores = exp.(scores);
+
+import Plots
+Plots.plot([p.pos[1] for p in poses], scores, legend=nothing,xlabel="object's pose x coordinate", ylabel="pdf")
+
+non_zero_score_depth_images = depth_images[ scores .> 0.02];
+non_zero_gif = cat(GL.view_depth_image.(non_zero_score_depth_images)...; dims=3);
+IV.imshow(non_zero_gif)
+
+#### sanity check over ####
 
 # Simulate motion
 pose_sequence = [
