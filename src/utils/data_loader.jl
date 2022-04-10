@@ -217,6 +217,17 @@ function scale_and_shift_mesh(mesh, world_scaling_factor, shift)
     mesh_copy
 end
 
+function scale_mesh(mesh::GL.Mesh, scaling_factor::Real)
+    mesh_copy = GL.copy_mesh(mesh)
+    mesh_copy.vertices = (mesh_copy.vertices * scaling_factor)
+    mesh_copy
+end
+
+function scale_mesh(mesh::GL.Mesh, scaling_factor::Vector{<:Real})
+    mesh_copy = GL.copy_mesh(mesh)
+    mesh_copy.vertices = (mesh_copy.vertices .* scaling_factor)
+    mesh_copy
+end
 
 function adjust_poses(poses, ids, world_scaling_factor, id_to_shift)
     new_poses = [get_c_relative_to_a(
