@@ -51,7 +51,7 @@ def infer_disparity_map(left_img_filename, right_img_filename):
 """
 
 dataset_dir = "/home/nishadg/mit/InverseGraphics/dataset"
-t = 2
+t = 3
 
 actual_depth = Serialization.deserialize(joinpath(dataset_dir, "$(lpad(t,5,'0'))_left_depth_julia"))
 actual_cloud = GL.depth_image_to_point_cloud(actual_depth, camera)
@@ -63,7 +63,6 @@ disparity_map = PyCall.py"infer_disparity_map"(
 
 depth = 2.0 * camera.fx ./ disparity_map 
 cloud = GL.depth_image_to_point_cloud(depth, camera)
-IV.imshow(GL.view_depth_image(depth))
 V.reset_visualizer()
 V.viz(cloud ./ 10.0; channel_name=:inf, color=I.colorant"blue")
 V.viz(actual_cloud./ 10.0; channel_name=:gen, color=I.colorant"red")
@@ -87,3 +86,11 @@ inliers ,mask = T.find_plane_inliers(cloud, table_eq);
 V.reset_visualizer()
 V.viz(cloud ./ 10.0; channel_name=:inf, color=I.colorant"blue")
 V.viz(inliers./ 10.0; channel_name=:gen, color=I.colorant"black")
+
+camera_pose = T.camera_pose_from_table_eq(table_eq);
+V.reset_visualizer()
+V.viz(GL.move_points_to_frame_b(inliers, camera_pose)./ 10.0; channel_name=:adjusted, color=I.colorant"black")
+
+
+import PyCall
+np = PyCall.pyimport("numpy")

@@ -211,9 +211,15 @@ function scale_and_shift_pose(p, world_scaling_factor, shift)
         Pose(shift...))
 end
 
-function scale_and_shift_mesh(mesh, world_scaling_factor, shift)
+function scale_and_shift_mesh(mesh, world_scaling_factor::Real, shift)
     mesh_copy = GL.copy_mesh(mesh)
     mesh_copy.vertices = (mesh_copy.vertices * world_scaling_factor) .- shift
+    mesh_copy
+end
+
+function scale_and_shift_mesh(mesh, world_scaling_factor::Vector, shift)
+    mesh_copy = GL.copy_mesh(mesh)
+    mesh_copy.vertices = (mesh_copy.vertices .* world_scaling_factor) .- shift
     mesh_copy
 end
 

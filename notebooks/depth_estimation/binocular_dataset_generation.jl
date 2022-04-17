@@ -17,16 +17,18 @@ end
 import Random
 V.setup_visualizer()
 
+
+meshdir = joinpath(dirname(dirname(pathof(T))),"notebooks/depth_estimation")
 mesh_names = ["cube_triangulated.obj",
               "sphere_triangulated.obj",
               "cylinder_small_triangulated.obj",
               "triangular_prism_triangulated.obj",
               "crescent_triangulated.obj",
               "arch_triangulated.obj"
-            ]
-boxes, meshes = let 
+             ]
+let 
     meshes = [
-        GL.get_mesh_data_from_obj_file(joinpath(dirname(dirname(pathof(T))),"notebooks/depth_estimation", m))
+        GL.get_mesh_data_from_obj_file(joinpath(meshdir, m))
         for m in mesh_names
     ];
     meshes = [
@@ -53,7 +55,7 @@ background_mesh = GL.box_mesh_from_dims(T.get_dims(background_bbox))
 
 # Initialize the canera intrinsics and renderer that will render using those intrinsics.
 camera = GL.CameraIntrinsics()
-renderer = GL.setup_renderer(camera, GL.RGBMode())
+renderer = GL.setup_renderer(camera, GL.RGBMode(), gl_version=(3,3))
 GL.load_object!(renderer, table_mesh)
 GL.load_object!(renderer, background_mesh)
 for m in meshes
