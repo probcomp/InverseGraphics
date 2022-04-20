@@ -11,4 +11,12 @@ function Gen.logpdf(::UniformDiForest, diforest::LG.SimpleDiGraph, n::Int)
     - ((n - 1) * log(n+1))
 end
 
+function Gen.random(::UniformDiForest, num_verts::Int)
+    prufer_code = [rand(1:(num_verts+1)) for _ in 1:(num_verts - 1)]
+    g = T.prufer_code_to_tree(prufer_code)
+    g = T.make_bfs_tree(g, 1)
+    g = T.decapitate(g, 1)
+end
+
+
 export uniform_diforest

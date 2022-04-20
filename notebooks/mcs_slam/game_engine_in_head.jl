@@ -368,9 +368,6 @@ V.viz(rerendered_cloud ./ 10.0; color=I.colorant"red", channel_name=:h1)
 V.viz(c2 ./ 10.0; color=I.colorant"black", channel_name=:h2)
 
 
-T.axis_aligned_bbox_from_point_cloud(entities[1])
-
-
 # +
 refined_pose1 = T.icp_object_pose(
     IDENTITY_POSE,

@@ -67,6 +67,10 @@ function get_edges(trace::Gen.Trace)
     collect(LG.edges(get_structure(trace)))
 end
 
+function get_edges(g::LG.AbstractGraph)
+    collect(LG.edges(g))
+end
+
 export scene, get_scene_graph, structure_addr, obs_addr, get_structure, get_gen_cloud, get_obs_cloud, get_object_names,
         get_object_boxes, get_num_objects, get_poses, get_cam_pose, get_edges, obj_name_from_idx, get_object_meshes
 

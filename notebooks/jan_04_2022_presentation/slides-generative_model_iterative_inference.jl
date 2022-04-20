@@ -197,7 +197,7 @@ v,n,f = id_to_vnf[ids[idx]]
 v,n,f = GL.mesh_from_voxelized_cloud(GL.voxelize(collect(transpose(v)), 1.0), 1.0)
 V.viz_mesh(v,f,T.get_c_relative_to_a(cam_pose, gt_poses[idx]), :mesh;color=I.colorant"yellow")
 
-pose,box = T.axis_aligned_bbox_from_point_cloud(collect(transpose(v)))
+box, pose = T.axis_aligned_bounding_box(collect(transpose(v)))
 point_list = T.get_bbox_segments_point_list(box, T.get_c_relative_to_a(cam_pose, gt_poses[idx]) * pose )
 V.viz_box(point_list, :box)
 
@@ -253,7 +253,7 @@ V.viz_box(point_list, :box10; color=I.colorant"black")
 
 for idx in 1:length(ids)
     v,n,f = id_to_vnf[ids[idx]]
-    pose,box = T.axis_aligned_bbox_from_point_cloud(collect(transpose(v)))
+    box, pose = T.axis_aligned_bounding_box(collect(transpose(v)))
     point_list = T.get_bbox_segments_point_list(box, T.get_c_relative_to_a(cam_pose, gt_poses[idx]) * pose )
     V.viz_box(point_list, Symbol("box$(idx)"))
 end

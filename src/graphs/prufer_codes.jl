@@ -38,6 +38,10 @@ function get_all_undirected_trees(num_verts)
     possible_graphs = prufer_code_to_tree.(possible_codes)[:]
 end
 
+function make_bfs_tree(g::LG.SimpleGraph, root_id::Int)
+    LG.bfs_tree(g, root_id)
+end
+
 function get_all_possible_scene_graphs(num_verts; depth_limit=nothing)
     possible_undirected_graphs = get_all_undirected_trees(num_verts)
     possible_scene_graphs = map(G -> LG.bfs_tree(G, num_verts), possible_undirected_graphs)
@@ -48,4 +52,3 @@ function get_all_possible_scene_graphs(num_verts; depth_limit=nothing)
     possible_scene_graphs
 end
 
-    

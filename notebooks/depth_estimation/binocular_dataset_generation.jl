@@ -35,11 +35,11 @@ let
         T.scale_mesh(m, 0.1)
         for m in meshes
     ]
-    pose_and_bboxes = (x -> T.axis_aligned_bbox_from_point_cloud(x.vertices)).(meshes)
+    bbox_and_poses = (x -> T.axis_aligned_bounding_box(x.vertices)).(meshes)
     for i in 1:length(meshes)
-        meshes[i].vertices = meshes[i].vertices .- pose_and_bboxes[i][1].pos
+        meshes[i].vertices = meshes[i].vertices .- bbox_and_poses[i].pose.pos
     end
-    [i[2] for i in pose_and_bboxes], meshes
+    [i.box for i in bbox_and_poses], meshes
 end
 
 

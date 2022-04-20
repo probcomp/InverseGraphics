@@ -45,6 +45,11 @@ function discretize(cloud, resolution)
     round.(cloud ./ resolution) * resolution
 end
 
+function uniquify(cloud)
+    idxs = unique(i -> cloud[:,i], 1:size(cloud)[2])
+    cloud[:, idxs]
+end
+
 function voxelize(cloud, resolution)
     cloud = round.(cloud ./ resolution) * resolution
     idxs = unique(i -> cloud[:,i], 1:size(cloud)[2])

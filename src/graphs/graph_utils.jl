@@ -78,6 +78,14 @@ function decapitate(tree::LG.SimpleGraph; root::Union{Int,Nothing}=nothing)
     diforest
 end
 
+# Peform a BFS from a specified node, to assign directions to each of the edges.
+# Then, remove that specified node from the directed graph and return what is left behind.
+function decapitate(diforest::LG.SimpleDiGraph; root::Union{Int,Nothing}=nothing)
+    root = isnothing(root) ? LG.nv(tree) : root
+    LG.rem_vertex!(diforest, root)
+    diforest
+end
+
 # Add a new node to a directed forest. Then, for each existing root node of the forest, add
 # an edge from the newly added node to that root. This turns the forest into a tree.
 function recapitate(diforest::LG.SimpleDiGraph)
