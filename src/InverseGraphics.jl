@@ -13,6 +13,8 @@ import PyCall
 import LightGraphs as LG
 import MetaGraphs as MG
 import StaticArrays: SVector, @SVector, StaticVector
+import FileIO
+import Images as I
 
 function __init__()
     numpy = PyCall.pyimport("numpy")

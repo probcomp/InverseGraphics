@@ -235,14 +235,6 @@ function scale_mesh(mesh::GL.Mesh, scaling_factor::Vector{<:Real})
     mesh_copy
 end
 
-function adjust_poses(poses, ids, world_scaling_factor, id_to_shift)
-    new_poses = [get_c_relative_to_a(
-        Pose(p.pos * world_scaling_factor, p.orientation),
-        Pose(id_to_shift[id]...))
-        for (id,p) in zip(ids,poses)]
-    return new_poses 
-end
-
 function load_ycbv_dense_fusion_predictions_adjusted(YCB_DIR, IDX, world_scaling_factor, id_to_shift)
     dense_poses, dense_ids = load_ycbv_dense_fusion_predictions(YCB_DIR, IDX);
     dense_poses_adjusted = adjust_poses(dense_poses, dense_ids, world_scaling_factor, id_to_shift)

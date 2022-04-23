@@ -10,8 +10,8 @@ function xz_plane_aligned_bounding_box(point_cloud::Matrix, resolution::Real)
     proj_onto_xz = GL.voxelize(vcat(point_cloud[1,:]',point_cloud[3, :]'), resolution)
     rect = cv2.minAreaRect(np.array(permutedims(proj_onto_xz), dtype="float32"))
     ((cx,cz), (width, height), rotation) = rect
-    bottom, top = T.min_max(point_cloud[2, :])
-    (bbox=T.S.Box(width, top-bottom, height), pose=Pose([cx, (top+bottom)/2, cz], R.RotY(-deg2rad(rotation))))
+    bottom, top = min_max(point_cloud[2, :])
+    (bbox=S.Box(width, top-bottom, height), pose=Pose([cx, (top+bottom)/2, cz], R.RotY(-deg2rad(rotation))))
 end
 
 function axis_aligned_bounding_box(point_cloud::Matrix)
@@ -43,20 +43,27 @@ function subtract_boundary(cloud::Matrix,  bbox::S.Box, bbox_pose::Pose, wall_ep
     c[:, get_boundary_mask(cloud, bbox, bbox_pose, wall_epsilon, floor_epsilon)]
 end
 
-function get_bbox_corners(bbox::S.Box)
+
+function get_bbox_corners(bbox::S.Box, pose::Pose)
     x,y,z = get_dims(bbox) ./ 2
     nominal_corners = collect([
         -x -y -z;
         -x y -z;
         x y -z;
         x -y -z;
-        -x -y  z;
-        -x y  z;
         x y  z;
         x -y  z;
+        -x -y  z;
+        -x y  z;
     ]')
-    nominal_corners
+    corners = move_points_to_frame_b(nominal_corners, pose)
 end
+
+function get_bbox_corners_projected_to_xz(bbox::S.Box, pose::Pose)
+    corners = get_bbox_corners(bbox,pose)
+    corners[:, [1,3,5,7,1]]
+end
+
 
 function get_bbox_segments_point_list(bbox::S.Box, pose::Pose)
     x,y,z = get_dims(bbox) ./ 2

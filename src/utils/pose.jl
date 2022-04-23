@@ -1,7 +1,6 @@
 
 import Rotations
 import PoseComposition: Pose
-import LinearAlgebra: I
 import Base: convert
 
 function Pose(orientation::Rotations.Rotation{3})::Pose
@@ -85,7 +84,7 @@ end
 
 function convert(::Type{Matrix{Float32}}, pose::Pose)
     R = Matrix{Float32}(pose.orientation)
-    mat = Matrix{Float32}(I, 4, 4)
+    mat = Matrix{Float32}(LinearAlgebra.I, 4, 4)
     mat[1:3,1:3] = R
     mat[1:3,4] = pose.pos
     return mat

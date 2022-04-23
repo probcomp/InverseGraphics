@@ -105,4 +105,47 @@ function edges(g::LG.SimpleDiGraph)
 end
 
 
-export no_edge_graph, graph_with_edges, isTree, decapitate, uniform_diforest, isFloating, edges
+
+# Visualize Graph
+function render_graph(g_in::LG.SimpleDiGraph; names=nothing, colors=nothing,title=nothing)
+
+    num_verts = LG.nv(g_in)
+    
+    if isnothing(names)
+        names = string.(collect(1:num_verts))
+    end
+    if isnothing(colors)
+        colors = fill(I.colorant"tan", num_verts)
+    end
+    colors = map(x -> convert(I.RGBA,x), colors)
+
+    graphviz = PyCall.pyimport("graphviz")
+    g_out = graphviz.Digraph()
+    g_out.attr("node", style="filled")
+    for (i,v) in enumerate(LG.vertices(g_in))
+      g_out.node(string(v), names[i], fillcolor="#"*I.hex(colors[i], :rrggbbaa))
+    end
+    for e in LG.edges(g_in)
+      g_out.edge(string(LG.src(e)),
+                 string(LG.dst(e)))
+    end
+    g_out
+
+
+    max_width_px = 2000
+    max_height_px = 2000
+    dpi = 500
+    g_out.attr("graph",
+               # See https://graphviz.gitlab.io/_pages/doc/info/attrs.html#a:size
+               size=string(max_width_px / dpi, ",",
+                           max_height_px / dpi,
+                           # Scale up if drawing is smaller than this size
+                           "!"),
+               dpi=string(dpi))
+    if isnothing(title)
+        g_out.attr(label=title)
+    end
+    g_out.render("/tmp/g", format="png")
+
+    FileIO.load("/tmp/g.png")
+end

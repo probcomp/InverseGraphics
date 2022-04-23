@@ -99,4 +99,14 @@ function mix(a,b,alpha)
     alpha .* a .+ (1 - alpha) .* b
 end
 
+function camera_intrinsics_matrix(intrinsics::GL.CameraIntrinsics)
+    K = zeros(3,3)
+    K[1,1] = intrinsics.fx
+    K[2,2] = intrinsics.fy
+    K[1,3] = intrinsics.cx
+    K[2,3] = intrinsics.cy
+    K[3,3] = 1.0
+    K
+end
+
 export voxelize, min_max, discretize, center_cloud, pose_distance
