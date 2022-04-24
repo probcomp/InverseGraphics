@@ -9,18 +9,16 @@ import NearestNeighbors
 import LightGraphs as LG
 import ImageView as IV
 import Gen
-try
-    import MeshCatViz as V
-catch
-    import MeshCatViz as V    
-end
+import Open3DVisualizer as V
+import MeshCatViz as MV
+import Plots
 
-V.setup_visualizer()
+MV.setup_visualizer()
 
 intrinsics = GL.CameraIntrinsics();
-# intrinsics = GL.scale_down_camera(intrinsics, 4);
+intrinsics = GL.scale_down_camera(intrinsics, 4);
 
-renderer = GL.setup_renderer(intrinsics, GL.DepthMode());
+renderer = GL.setup_renderer(intrinsics, GL.DepthMode(), gl_version=(3,3));
 YCB_DIR = joinpath(pwd(),"data")
 world_scaling_factor = 10.0
 obj_paths = T.load_ycb_model_obj_file_paths(YCB_DIR);
@@ -30,78 +28,55 @@ for id in 1:21
     mesh.vertices = vcat(mesh.vertices[1,:]',-mesh.vertices[3,:]',mesh.vertices[2,:]')
     GL.load_object!(renderer, mesh);
 end
+names = T.load_ycb_model_list(YCB_DIR)
 
-
-resolution  = 0.05
-
-test_depth_image = GL.gl_render(renderer, [5], [Pose([0.0, 0.0, 10.0], IDENTITY_ORN)], IDENTITY_POSE);
-c = GL.depth_image_to_point_cloud(test_depth_image, intrinsics);
-c = GL.voxelize(c, resolution)
-V.viz(c);
-
-
-Gen.@gen function model(model_params::T.SceneModelParameters)
-    camera_pose = {T.camera_pose_addr()} ~ T.uniformPose(-1000.0,1000.0,-1000.0,1000.0,-1000.0,1000.0)
-    p = {T.floating_pose_addr(1)} ~ T.uniformPose(-2.0, 2.0, -2.0, 2.0, 7.0, 13.0)
-    c =  model_params.get_cloud(
-        [p], model_params.ids, camera_pose, 1
+Gen.@gen function model(renderer,  resolution, p_outlier, ball_radius)
+    id ~ Gen.categorical(ones(21) ./ 21)
+    p = {T.floating_pose_addr(1)} ~ T.uniformPose(-0.001, 0.001, -0.001, 0.001, 5.001, 5.002)
+    depth_image =  GL.gl_render(
+        renderer, [id], [p], IDENTITY_POSE
     )
+    c = GL.depth_image_to_point_cloud(depth_image, renderer.camera_intrinsics);
+    c = GL.voxelize(c, resolution)
     obs_cloud = {T.obs_addr()} ~ T.uniform_mixture_from_template(
                                                 c,
-                                                0.01,
-                                                resolution,
+                                                p_outlier,
+                                                ball_radius,
                                                 (-100.0,100.0,-100.0,100.0,-100.0,300.0))
-    return (rendered_cloud=c,
-            obs_cloud=obs_cloud)
+    return (id =id, pose=p, depth_image=depth_image, rendered_cloud=c, obs_cloud=obs_cloud)
 end
 
 function viz_trace(trace)
-    V.reset_visualizer()
-    V.viz(Gen.get_retval(trace).rendered_cloud; color=I.colorant"red", channel_name=:gen);
-    V.viz(Gen.get_retval(trace).obs_cloud; color=I.colorant"blue", channel_name=:obs);
+    MV.reset_visualizer()
+    MV.viz(Gen.get_retval(trace).rendered_cloud  ./ 10.0; color=I.colorant"red", channel_name=:gen);
+    MV.viz(Gen.get_retval(trace).obs_cloud ./ 10.0; color=I.colorant"blue", channel_name=:obs);
 end
 
-function render_func(i,p, cam_pose)
-    test_depth_image = GL.gl_render(renderer, i, p, cam_pose);
-    c = GL.depth_image_to_point_cloud(test_depth_image, intrinsics);
-    c = GL.voxelize(c, resolution)
-end
+resolution = 0.1
+args = (renderer, resolution, 0.01, resolution * 2);
+gt_trace, _ = Gen.generate(model, args);
+@show gt_trace[:id]
+gt_cloud = Gen.get_retval(gt_trace).rendered_cloud
+IV.imshow(GL.view_depth_image(Gen.get_retval(gt_trace).depth_image))
+MV.reset_visualizer()
+MV.viz(gt_cloud  ./ 10.0; color=I.colorant"red", channel_name=:gen);
 
-hypers = T.Hyperparams(
-    slack_dir_conc=1000.0, # Flush Contact parameter of orientation VMF
-    slack_offset_var=0.5, # Variance of zero mean gaussian controlling the distance between planes in flush contact
-    p_outlier=0.01, # Outlier probability in point cloud likelihood
-    noise=0.1, # Spherical ball size in point cloud likelihood
-    resolution=resolution, # Voxelization resolution in point cloud likelihood
-    parent_face_mixture_prob=0.99, # If the bottom of the can is in contact with the table, the an object
-    # in contact with the can is going to be contacting the top of the can with this probability.
-    floating_position_bounds=(-1000.0, 1000.0, -1000.0,1000.0,-1000.0,1000.0), # When an object is
-    # not in contact with another object, its pose is drawn uniformly with position bounded by the given extent.
-)
+observations = Gen.choicemap(T.obs_addr() => gt_cloud);
 
 particles = [
-    let 
-        params = T.SceneModelParameters(
-            boxes=[S.Box(40.0,40.0,0.1)], # Bounding box size of objects
-            ids=[i],
-            get_cloud=
-            (poses, ids, cam_pose, i) -> render_func(ids, poses, cam_pose), # Get cloud function
-            hyperparams=hypers,
-            N=1 # Number of meshes to sample for pseudomarginalizing out the shape prior.
-        );
-        Gen.generate(model, (params,), Gen.choicemap(T.obs_addr() => c, T.camera_pose_addr() => IDENTITY_POSE))[1]
-    end
-    for i in 1:length(obj_paths)
+    Gen.generate(model, args, observations)
+    for _ in 1:5000
 ];
-viz_trace(particles[1]);
 
-particles =map(t -> T.icp_move(t, 1)[1], particles);
+log_weights = [i[2] for i in particles];
+log_weights = log_weights .- Gen.logsumexp(log_weights);
+weights = exp.(log_weights)
+reordered_particles = particles[sortperm(weights;rev=true)];
+best_trace = reordered_particles[1][1];
+@show weights[sortperm(weights,rev=true)]
+@show best_trace[:id], gt_trace[:id]
+viz_trace(best_trace);
 
+i = 2
+viz_trace(reordered_particles[i][1]);
 
-V.reset_visualizer()
-
-
-
-
-
-IV.imshow(GL.view_depth_image(test_depth_image))
