@@ -27,7 +27,8 @@ function geodesicHopf(newZ::StaticVector{3, <:Real}, planarAngle::Real, atol=1e-
   else
     axis = cross(zUnit, newZ)
     @assert !(axis ≈ zero(axis)) || newZ ≈ zUnit
-    geodesicAngle = let θ = asin(clamp(norm(axis), -1, 1))
+    geodesicAngle = let
+      θ = asin(clamp(norm(axis), -1, 1))
       dot(zUnit, newZ) > 0 ? θ : π - θ
     end
   end
