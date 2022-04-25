@@ -13,7 +13,8 @@ function make_hopf_planar_contact(x::Real, y::Real, angle::Real,
     return pc
 end
 
-function geodesicHopf(newZ::StaticVector{3, <:Real}, planarAngle::Real, atol=1e-3)
+
+function geodesicHopf_z(newZ::StaticVector{3, <:Real}, planarAngle::Real, atol=1e-3)
   @assert (abs(norm(newZ) - 1.0) < atol) "newZ $(newZ) $(norm(newZ))"
   zUnit = @SVector([0, 0, 1])
   if newZ ≈ -zUnit
@@ -23,6 +24,38 @@ function geodesicHopf(newZ::StaticVector{3, <:Real}, planarAngle::Real, atol=1e-
   elseif newZ ≈ zUnit
     # Choice of axis doesn't matter here as long as it's nonzero
     axis = @SVector([1, 0, 0])
+    geodesicAngle = 0
+  else
+    axis = cross(zUnit, newZ)
+    @assert !(axis ≈ zero(axis)) || newZ ≈ zUnit
+    geodesicAngle = let
+      θ = asin(clamp(norm(axis), -1, 1))
+      dot(zUnit, newZ) > 0 ? θ : π - θ
+    end
+  end
+  return (R.AngleAxis(geodesicAngle, axis...) *
+          R.AngleAxis(planarAngle, zUnit...))
+end
+
+# geodesicHopf = geodesicHopf_z
+
+
+function geodesicHopf_select_axis(newZ::StaticVector{3, <:Real}, planarAngle::Real, axis_idx::Int, atol=1e-3)
+  @assert (abs(norm(newZ) - 1.0) < atol) "newZ $(newZ) $(norm(newZ))"
+  axisUnit = Float64[0, 0, 0]
+  axisUnit[axis_idx] = 1.0
+  zUnit = SVector{3}(axisUnit)
+  if newZ ≈ -zUnit
+    @warn "Singularity: anti-parallel z-axis, rotation has an undetermined degree of freedom"
+    axis = Float64[0, 0, 0]
+    axis[filter(x->(x != axis_idx),[1,2,3])[1]] = 1.0
+    axis = SVector{3}(axis)
+    geodesicAngle = π
+  elseif newZ ≈ zUnit
+    # Choice of axis doesn't matter here as long as it's nonzero
+    axis =  Float64[0, 0, 0]
+    axis[filter(x->(x != axis_idx),[1,2,3])[1]] = 1.0
+    axis = SVector{3}(axis)
     geodesicAngle = 0
   else
     axis = cross(zUnit, newZ)

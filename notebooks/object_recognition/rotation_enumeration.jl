@@ -12,6 +12,8 @@ import Gen
 import Open3DVisualizer as V
 import MeshCatViz as MV
 import Plots
+import StaticArrays
+import PyCall
 
 MV.setup_visualizer()
 
@@ -36,49 +38,34 @@ Gen.@gen function model(renderer,  resolution, p_outlier, ball_radius)
     depth_image =  GL.gl_render(
         renderer, [id], [p], IDENTITY_POSE
     )
-    c = GL.depth_image_to_point_cloud(depth_image, renderer.camera_intrinsics);
-    c = GL.voxelize(c, resolution)
+    cloud = GL.depth_image_to_point_cloud(depth_image, renderer.camera_intrinsics);
+    voxelized_cloud = GL.voxelize(cloud, resolution)
     obs_cloud = {T.obs_addr()} ~ T.uniform_mixture_from_template(
-                                                c,
+                                                voxelized_cloud,
                                                 p_outlier,
                                                 ball_radius,
                                                 (-100.0,100.0,-100.0,100.0,-100.0,300.0))
 
-    return (id =id, pose=p, depth_image=depth_image, rendered_cloud=c, obs_cloud=obs_cloud)
+    return (id =id, pose=p, cloud=cloud, voxelized_cloud=voxelized_cloud, depth_image=depth_image, obs_cloud=obs_cloud)
 end
 
 function viz_trace(trace)
     MV.reset_visualizer()
-    MV.viz(Gen.get_retval(trace).rendered_cloud  ./ 10.0; color=I.colorant"red", channel_name=:gen);
+    MV.viz(Gen.get_retval(trace).voxelized_cloud  ./ 10.0; color=I.colorant"red", channel_name=:gen);
     MV.viz(Gen.get_retval(trace).obs_cloud ./ 10.0; color=I.colorant"blue", channel_name=:obs);
 end
 
-resolution = 0.1
+resolution = 0.05
 constraints = Gen.choicemap(:id => 13);
-args = (renderer, resolution, 0.01, 0.01);
+args = (renderer, resolution, 0.1, 0.3);
 gt_trace, _ = Gen.generate(model, args, constraints);
 @show gt_trace[:id]
-gt_cloud = Gen.get_retval(gt_trace).rendered_cloud
-IV.imshow(GL.view_depth_image(Gen.get_retval(gt_trace).depth_image))
+
+gt_cloud = Gen.get_retval(gt_trace).voxelized_cloud
 MV.reset_visualizer()
 MV.viz(gt_cloud  ./ 10.0; color=I.colorant"red", channel_name=:gen);
+
 observations = Gen.choicemap(T.obs_addr() => gt_cloud);
-
-particles = [
-    Gen.generate(model, args, observations)
-    for _ in 1:5000
-];
-
-log_weights = [i[2] for i in particles];
-log_weights = log_weights .- Gen.logsumexp(log_weights);
-weights = exp.(log_weights)
-reordered_particles = particles[sortperm(weights;rev=true)];
-best_trace = reordered_particles[1][1];
-@show weights[sortperm(weights,rev=true)]
-@show best_trace[:id], gt_trace[:id]
-viz_trace(best_trace);
-
-
 
 function fibonacci_sphere(samples)
     points = []
@@ -104,74 +91,49 @@ other_rotation_angle = collect(0:0.2:(2*π));
 
 rotations_to_enumerate_over = [
     let
-        T.geodesicHopf(StaticArrays.SVector(dir), ang)
+        T.geodesicHopf_select_axis(StaticArrays.SVector(dir), ang, 1)
     end
     for dir in unit_sphere_directions, 
         ang in other_rotation_angle
 ];
 
-
 traces = (orn -> Gen.generate(model, args,
         Gen.choicemap(T.obs_addr() => gt_cloud,
         :id => gt_trace[:id],
         T.floating_pose_addr(1) => Pose([0.0, 0.0, 5.0], orn)))).(rotations_to_enumerate_over);
-
 scores = (i -> i[2]).(traces);
 
 log_weights = [i[2] for i in traces];
 log_weights = log_weights .- Gen.logsumexp(log_weights);
 weights = exp.(log_weights)
+best_trace, _ = traces[argmax(weights)];
+viz_trace(best_trace);
+sort(weights[:])
 
 
 xyz = [
-    rotations_to_enumerate_over[i,1] * [0, 0, 1]
+    rotations_to_enumerate_over[i,1] * [1, 0, 0]
     for i in 1:size(rotations_to_enumerate_over)[1] 
 ];
 log_weights_xyz = maximum(scores,dims=2)[:,1]
 log_weights_xyz = log_weights_xyz .- Gen.logsumexp(log_weights_xyz);
 weights_xyz = exp.(log_weights_xyz)
+order = sortperm(weights_xyz,rev=true)
+weights_xyz = weights_xyz[order]
+xyz = xyz[order]
 
+PyCall.py"""
+import matplotlib.pyplot as plt
+from mpl_toolkits import mplot3d
+def run_viz(x,y,z,c):
+    fig = plt.figure(figsize=(9, 6))
+    ax = plt.axes(projection='3d')
+    ax.scatter3D(x, y, z, c=c)
+    ax.set_title("3D scatterplot", pad=25, size=15)
+    ax.set_xlabel("X") 
+    ax.set_ylabel("Y") 
+    ax.set_zlabel("Z")
+    plt.show()
+"""
 
-# PyCall.py"""
-# from mpl_toolkits.mplot3d import Axes3D
-# import matplotlib.pyplot as plt
-# import numpy as np
-# from matplotlib import cm
-
-# def viz(points, weights):
-#     fig = plt.figure()
-#     ax = fig.add_subplot( 1, 1, 1, projection='3d')
-
-#     u = np.linspace( 0, 2 * np.pi, 120)
-#     v = np.linspace( 0, np.pi, 60 )
-
-#     # create the sphere surface
-#     XX = 10 * np.outer( np.cos( u ), np.sin( v ) )
-#     YY = 10 * np.outer( np.sin( u ), np.sin( v ) )
-#     ZZ = 10 * np.outer( np.ones( np.size( u ) ), np.cos( v ) )
-
-#     WW = XX.copy()
-#     for i in range( len( XX ) ):
-#         for j in range( len( XX[0] ) ):
-#             x = XX[ i, j ]
-#             y = YY[ i, j ]
-#             z = ZZ[ i, j ]
-#             WW[ i, j ] = near(np.array( [x, y, z ] ), pointList, 3)
-#     WW = WW / np.amax( WW )
-#     myheatmap = WW
-
-#     # ~ ax.scatter( *zip( *pointList ), color='#dd00dd' )
-#     ax.plot_surface( XX, YY,  ZZ, cstride=1, rstride=1, facecolors=cm.jet( myheatmap ) )
-#     plt.show() 
-
-# reordered_traces = traces[sortperm(weights;rev=true)];
-
-# i = 1;
-# best_trace = reordered_traces[i][1];
-# viz_trace(best_trace);
-# """
-
-
-
-
-import Plots
+PyCall.py"run_viz"( (i->i[1]).(xyz), (i->i[2]).(xyz), (i->i[3]).(xyz), weights_xyz)
