@@ -109,4 +109,20 @@ function camera_intrinsics_matrix(intrinsics::GL.CameraIntrinsics)
     K
 end
 
+function fibonacci_sphere(samples)
+    points = []
+    phi = π * (3. - sqrt(5.))
+    for i in 0:(samples-1)
+        y = 1 - (i / Float64(samples - 1)) * 2
+        radius = sqrt(1 - y * y)
+        theta = phi * i
+        x = cos(theta) * radius
+        z = sin(theta) * radius
+        push!(points, [x, y, z])
+    end
+    return points
+end
+
+
+
 export voxelize, min_max, discretize, center_cloud, pose_distance
