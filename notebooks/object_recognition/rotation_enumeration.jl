@@ -23,13 +23,16 @@ intrinsics = GL.scale_down_camera(intrinsics, 4);
 renderer = GL.setup_renderer(intrinsics, GL.DepthMode(), gl_version=(3,3));
 YCB_DIR = joinpath(pwd(),"data")
 world_scaling_factor = 10.0
-obj_paths = T.load_ycb_model_obj_file_paths(YCB_DIR);
-for id in 1:21
-    mesh = GL.get_mesh_data_from_obj_file(obj_paths[id]);
-    mesh = T.scale_and_shift_mesh(mesh, world_scaling_factor, zeros(3));
-    mesh.vertices = vcat(mesh.vertices[1,:]',-mesh.vertices[3,:]',mesh.vertices[2,:]')
-    GL.load_object!(renderer, mesh);
-end
+# obj_paths = T.load_ycb_model_obj_file_paths(YCB_DIR);
+# for id in 1:21
+#     mesh = GL.get_mesh_data_from_obj_file(obj_paths[id]);
+#     mesh = T.scale_and_shift_mesh(mesh, world_scaling_factor, zeros(3));
+#     mesh.vertices = vcat(mesh.vertices[1,:]',-mesh.vertices[3,:]',mesh.vertices[2,:]')
+#     GL.load_object!(renderer, mesh);
+# end
+box_mesh = GL.box_mesh_from_dims([1.0, 1.0, 1.0])
+GL.load_object!(renderer, box_mesh)
+
 names = T.load_ycb_model_list(YCB_DIR)
 
 Gen.@gen function model(renderer,  resolution, p_outlier, ball_radius)
@@ -55,9 +58,9 @@ function viz_trace(trace)
     MV.viz(Gen.get_retval(trace).obs_cloud ./ 10.0; color=I.colorant"blue", channel_name=:obs);
 end
 
-resolution = 0.05
-constraints = Gen.choicemap(:id => 13);
-args = (renderer, resolution, 0.1, 0.3);
+resolution = 0.1
+constraints = Gen.choicemap(:id => 1);
+args = (renderer, resolution, 0.1, 0.5);
 gt_trace, _ = Gen.generate(model, args, constraints);
 @show gt_trace[:id]
 
