@@ -9,6 +9,48 @@ import InverseGraphics as T
 import ImageView as IV
 import Open3DVisualizer as V
 
+
+YCB_DIR = joinpath(dirname(dirname(pathof(T))),"data")
+world_scaling_factor = 1.0
+id_to_cloud, id_to_shift, id_to_box  = T.load_ycbv_models_adjusted(YCB_DIR, world_scaling_factor);
+all_ids = sort(collect(keys(id_to_cloud)));
+names = T.load_ycb_model_list(YCB_DIR)
+
+IDX = 900
+# Load scene data.
+#    gt_poses : Ground truth 6D poses of objects (in the camera frame)
+#    ids      : object ids (order corresponds to the gt_poses list)
+#    rgb_image, gt_depth_image :
+#    cam_pose : 6D pose of camera (in world frame)
+#    original_camera : Camera intrinsics
+gt_poses, ids, gt_rgb_image, gt_depth_image, cam_pose, original_camera = T.load_ycbv_scene_adjusted(
+    YCB_DIR, IDX, world_scaling_factor, id_to_shift
+);
+GL.view_rgb_image(gt_rgb_image;in_255=true)
+
+IV.imshow(GL.view_rgb_image(gt_rgb_image;in_255=true))
+
+obj_paths = T.load_ycb_model_obj_file_paths(YCB_DIR)
+
+meshes = [
+    V.make_mesh(nothing, obj_paths[id]) for id in all_ids
+];
+
+V.open_window(original_camera, cam_pose)
+V.clear()
+for (id, p) in zip(ids, gt_poses)
+    V.add(V.move_mesh_to_pose(meshes[id], cam_pose * p))
+end
+V.set_camera_intrinsics_and_pose(original_camera, cam_pose)
+V.sync()
+
+img = V.capture_image()
+IV.imshow(GL.view_rgb_image(img))
+
+V.run()
+
+
+
 global o3d = PyCall.pyimport("open3d");
 
 V.open_window()
