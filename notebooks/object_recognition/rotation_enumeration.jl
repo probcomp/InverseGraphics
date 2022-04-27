@@ -58,9 +58,9 @@ function viz_trace(trace)
     MV.viz(Gen.get_retval(trace).obs_cloud ./ 10.0; color=I.colorant"blue", channel_name=:obs);
 end
 
-resolution = 0.1
+resolution = 0.2
 constraints = Gen.choicemap(:id => 1);
-args = (renderer, resolution, 0.1, 0.5);
+args = (renderer, resolution, 0.1, 0.4);
 gt_trace, _ = Gen.generate(model, args, constraints);
 @show gt_trace[:id]
 
@@ -89,8 +89,8 @@ function fibonacci_sphere(samples)
     return points
 end
 
-unit_sphere_directions = fibonacci_sphere(200);
-other_rotation_angle = collect(0:0.2:(2*π));
+unit_sphere_directions = fibonacci_sphere(500);
+other_rotation_angle = collect(0:0.1:(2*π));
 
 rotations_to_enumerate_over = [
     let
@@ -124,6 +124,7 @@ weights_xyz = exp.(log_weights_xyz)
 order = sortperm(weights_xyz,rev=true)
 weights_xyz = weights_xyz[order]
 xyz = xyz[order]
+weights_xyz
 
 PyCall.py"""
 import matplotlib.pyplot as plt
@@ -132,7 +133,7 @@ def run_viz(x,y,z,c):
     fig = plt.figure(figsize=(9, 6))
     ax = plt.axes(projection='3d')
     ax.scatter3D(x, y, z, c=c)
-    ax.set_title("3D scatterplot", pad=25, size=15)
+    p = ax.set_title("3D scatterplot", pad=25, size=15)
     ax.set_xlabel("X") 
     ax.set_ylabel("Y") 
     ax.set_zlabel("Z")
