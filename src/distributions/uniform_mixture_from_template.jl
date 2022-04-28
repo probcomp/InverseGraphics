@@ -130,4 +130,11 @@ function Gen.logpdf(
    Gen.logsumexp(log_pdfs) - log(length(log_pdfs))
 end
 
+function Gen.random(
+    ::UniformMixtureFromTemplateMultiCloud, X::Array{Matrix{Float64}},
+    p_outlier::Float64, radius::Float64, bounds::Tuple)
+    X
+end
+
+
 export uniform_mixture_from_template, uniform_mixture_from_template_multi_cloud
