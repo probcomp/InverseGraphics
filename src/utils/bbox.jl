@@ -15,14 +15,15 @@ function xz_plane_aligned_bounding_box(point_cloud::Matrix, resolution::Real)
 end
 
 function axis_aligned_bounding_box(point_cloud::Matrix)
-    mins, maxs = T.min_max(point_cloud[1:3,:]);
-    (bbox=T.S.Box((maxs .- mins)...), pose=Pose([((mins .+ maxs) ./ 2.0)[:]...]))
+    mins, maxs = min_max(point_cloud[1:3,:]);
+    (bbox=S.Box((maxs .- mins)...), pose=Pose([((mins .+ maxs) ./ 2.0)[:]...]))
 end
+
 function axis_aligned_bounding_box(point_clouds::Vector{Matrix{TYPE}}) where TYPE <: Real
-    mins_maxs = T.min_max.(point_clouds)
-    mins,_ = T.min_max(hcat([i[1][1:3] for i in mins_maxs]...))
-    _, maxs = T.min_max(hcat([i[2][1:3] for i in mins_maxs]...))
-    (bbox=T.S.Box((maxs .- mins)...), pose=Pose([((mins .+ maxs) ./ 2.0)[:]...]))
+    mins_maxs = min_max.(point_clouds)
+    mins,_ = min_max(hcat([i[1][1:3] for i in mins_maxs]...))
+    _, maxs = min_max(hcat([i[2][1:3] for i in mins_maxs]...))
+    (bbox=S.Box((maxs .- mins)...), pose=Pose([((mins .+ maxs) ./ 2.0)[:]...]))
 end
 
 function get_boundary_mask(cloud::Matrix, bbox::S.Box, bbox_pose::Pose, wall_epsilon::Real, floor_epsilon::Real)
