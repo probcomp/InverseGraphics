@@ -133,7 +133,7 @@ end
 function Gen.random(
     ::UniformMixtureFromTemplateMultiCloud, X::Array{Matrix{Float64}},
     p_outlier::Float64, radius::Float64, bounds::Tuple)
-    X
+    X[1]
 end
 
 
