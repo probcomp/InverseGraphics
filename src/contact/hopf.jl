@@ -37,7 +37,7 @@ function geodesicHopf_z(newZ::StaticVector{3, <:Real}, planarAngle::Real, atol=1
           R.AngleAxis(planarAngle, zUnit...))
 end
 
-# geodesicHopf = geodesicHopf_z
+geodesicHopf = geodesicHopf_z
 
 
 function geodesicHopf_select_axis(newZ::StaticVector{3, <:Real}, planarAngle::Real, axis_idx::Int, atol=1e-3)
