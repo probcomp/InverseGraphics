@@ -4,3 +4,4 @@ jupytext
 numpy
 imageio
 opencv-python
+open3d
