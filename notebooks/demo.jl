@@ -36,7 +36,7 @@ IV.imshow(x)
 # +
 # Create renderer instance
 camera = T.scale_down_camera(original_camera, 4)
-renderer = GL.setup_renderer(camera, GL.DepthMode(); gl_version=(3,3))
+renderer = GL.setup_renderer(camera, GL.DepthMode())
 # Add voxelized object models to renderer instance.
 resolution = 0.05
 for id in all_ids
