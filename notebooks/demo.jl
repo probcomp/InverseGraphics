@@ -1,20 +1,15 @@
 # -*- coding: utf-8 -*-
 import Revise
-import GLRenderer as GL
-import Images as I
-import MiniGSG as S
-import Rotations as R
-import PoseComposition: Pose, IDENTITY_POSE, IDENTITY_ORN
-import InverseGraphics as T
-import NearestNeighbors
-import LightGraphs as LG
-import Gen
+@time import InverseGraphics as T
+@time import InverseGraphics: Pose, IDENTITY_POSE, IDENTITY_ORN, GL, I, S
+@time import Gen
 try
     import MeshCatViz as V
 catch
     import MeshCatViz as V    
 end
 import ImageView as IV
+
 
 V.setup_visualizer()
 
@@ -41,7 +36,7 @@ IV.imshow(x)
 # +
 # Create renderer instance
 camera = T.scale_down_camera(original_camera, 4)
-renderer = GL.setup_renderer(camera, GL.DepthMode())
+renderer = GL.setup_renderer(camera, GL.DepthMode(); gl_version=(3,3))
 # Add voxelized object models to renderer instance.
 resolution = 0.05
 for id in all_ids
@@ -75,7 +70,6 @@ cloud2 = GL.depth_image_to_point_cloud(gt_depth_image, original_camera)
 V.viz(cloud2 ./5.0; color=I.colorant"red", channel_name=:obs_cloud)
 # -
 
-vcat(ids,[1])
 
 # +
 # Model parameters
@@ -141,13 +135,6 @@ V.viz(T.get_obs_cloud_in_world_frame(trace) ./ 10.0; color=I.colorant"red", chan
 V.viz(T.get_gen_cloud_in_world_frame(trace) ./ 10.0; color=I.colorant"black", channel_name=:gen_cloud)
 # -
 
-# Generate a trace
-trace, _ = Gen.generate(T.scene, (params,), constraints);
-@show Gen.get_score(trace)
-# Visulize initial trace.
-V.reset_visualizer()
-V.viz(T.get_obs_cloud_in_world_frame(trace) ./ 10.0; color=I.colorant"red", channel_name=:obs_cloud)
-V.viz(T.get_gen_cloud_in_world_frame(trace) ./ 10.0; color=I.colorant"black", channel_name=:gen_cloud)
 
 trace = T.force_structure(trace, empty_graph);
 
