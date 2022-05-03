@@ -7,6 +7,7 @@ function Pose(orientation::Rotations.Rotation{3})::Pose
     return Pose(zeros(3), orientation)
 end
 
+const IDENTITY_ORN = IDENTITY_ORIENTATION
 const IDENTITY_ORIENTATION = Rotations.UnitQuaternion(1.0,0.0,0.0,0.0)
 
 function Pose(pos::AbstractVector{<:Real})::Pose
