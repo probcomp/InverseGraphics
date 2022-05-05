@@ -42,7 +42,9 @@ data/
 
 # Other Issues
 
-If you encounter issues with PyCall referencing the wrong python instance
+If you encounter issues with PyCall referencing the wrong python instance run: `sh scripts/fix_pycall.sh`
+
+which runs the following command
 ```shell
 PYTHON=$(which python) PYCALL_JL_RUNTIME_PYTHON=$(which python) julia --project -e 'import Pkg; Pkg.build("Conda"); Pkg.build("PyCall")'
 ```
