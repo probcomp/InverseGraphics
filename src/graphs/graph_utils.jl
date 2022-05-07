@@ -107,7 +107,7 @@ end
 
 
 # Visualize Graph
-function render_graph(g_in::LG.SimpleDiGraph; names=nothing, colors=nothing,title=nothing)
+function render_graph(g_in::LG.SimpleDiGraph; dpi=500, names=nothing, colors=nothing,title=nothing)
 
     num_verts = LG.nv(g_in)
     
@@ -134,7 +134,7 @@ function render_graph(g_in::LG.SimpleDiGraph; names=nothing, colors=nothing,titl
 
     max_width_px = 2000
     max_height_px = 2000
-    dpi = 500
+    dpi = dpi
     g_out.attr("graph",
                # See https://graphviz.gitlab.io/_pages/doc/info/attrs.html#a:size
                size=string(max_width_px / dpi, ",",
