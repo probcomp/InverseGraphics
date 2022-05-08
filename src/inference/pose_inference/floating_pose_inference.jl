@@ -86,7 +86,7 @@ export pose_mixture_move
 
 
 # ICP move
-function icp_move(trace, i; iterations=10, unexplained_radius=0.2, crazy_pose=Pose([-100.0,-100.0,-100.0]))
+function icp_move(trace, i; iterations=10, unexplained_radius=0.2, crazy_pose=Pose([-100.0,-100.0,-100.0]), no_tree=false)
     # get_cloud_func needs to give the points in the world frame
     model_params = get_args(trace)[1]
     cam_pose = trace[:camera_pose]
@@ -98,13 +98,15 @@ function icp_move(trace, i; iterations=10, unexplained_radius=0.2, crazy_pose=Po
             floating_pose_addr(i) => crazy_pose)
     )
     obs_cloud = move_points_to_frame_b(
-        get_unexplained_obs_cloud(t, unexplained_radius)[1], cam_pose)
+        get_unexplained_obs_cloud(t, unexplained_radius)[1], cam_pose
+    )
 
     refined_pose = trace[addr]
     refined_pose = icp_object_pose(
         refined_pose,
         obs_cloud,
-        p -> move_points_to_frame_b(get_cloud_func([p], [id], cam_pose, 1), cam_pose)
+        p -> move_points_to_frame_b(get_cloud_func([p], [id], cam_pose, 1), cam_pose);
+        no_tree=no_tree
     )
 
     acceptances = false

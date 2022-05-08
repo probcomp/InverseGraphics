@@ -29,16 +29,31 @@ Returns the rigid transformation `T::Pose` such that `T * csource` is as close
 as possible to `ctarget`.  Here `ctarget` and `csource` are point clouds, that
 is, 3×something matrices where each column represents a point.
 """
-function icp(c1, c2; iterations=10, c1_tree=nothing)
+function icp(c1, c2; iterations=10, c1_tree=nothing, no_tree=false)
     T = IDENTITY_POSE
-    if isnothing(c1_tree)
-        c1_tree = NearestNeighbors.KDTree(c1)
-    else
-        @assert length(c1_tree.data) == size(c1)[2]
+    if !no_tree
+        if isnothing(c1_tree)
+            c1_tree = NearestNeighbors.KDTree(c1)
+        else
+            @assert length(c1_tree.data) == size(c1)[2]
+        end
     end
     for _ in 1:iterations
-        idxs, dists = NearestNeighbors.nn(c1_tree, c2)
-        neighbors = c1[:,idxs]
+        if no_tree
+            r = zeros(size(c1,2), size(c2,2))
+            for i = 1:size(c1, 2)
+                a =  c1[:,i]
+                for j = 1:size(c2, 2)
+                    r[i, j] = sum((a .- c2[:,j]).^2)
+                end
+            end
+            idxs = (x->x[1]).(argmin(r;dims=1)[:])
+            neighbors = c1[:,idxs]
+        else
+            idxs, dists = NearestNeighbors.nn(c1_tree, c2)
+            neighbors = c1[:,idxs]
+        end
+
         new_T = get_transform_between_two_registered_clouds(c2, neighbors)
         c2 = new_T.pos .+ (new_T.orientation * c2)
         T = get_c_relative_to_a(new_T, T)
@@ -48,21 +63,23 @@ function icp(c1, c2; iterations=10, c1_tree=nothing)
 end
 
 function icp_object_pose(init_pose, obs, get_cloud_func;
-    c1_tree=nothing, random_rotation_initialization=false, outer_iterations=5, iterations=10)
+    c1_tree=nothing, no_tree=false,random_rotation_initialization=false, outer_iterations=5, iterations=10)
     p = init_pose
     if random_rotation_initialization
         p = Pose(p.pos, uniform_rot3())
     end
 
-    if isnothing(c1_tree)
-        c1_tree = NearestNeighbors.KDTree(obs)
-    else
-        @assert length(c1_tree.data) == size(obs)[2]
+    if !no_tree
+        if isnothing(c1_tree)
+            c1_tree = NearestNeighbors.KDTree(obs)
+        else
+            @assert length(c1_tree.data) == size(obs)[2]
+        end
     end
 
     c = get_cloud_func(p)
     for _ in 1:outer_iterations
-        T = icp(obs, c; iterations=iterations, c1_tree=c1_tree)
+        T = icp(obs, c; iterations=iterations, c1_tree=c1_tree, no_tree=no_tree)
         p = get_c_relative_to_a(T,p)
         c = get_cloud_func(p)
     end

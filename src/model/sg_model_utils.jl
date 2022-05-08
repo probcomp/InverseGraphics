@@ -27,7 +27,7 @@ function get_gen_cloud(trace, i)
     get_retval(trace).rendered_clouds[i]
 end
 function get_obs_cloud(trace)
-    trace[:obs]
+    trace[obs_addr()]
 end
 function get_gen_cloud_in_world_frame(trace, i)
     move_points_to_frame_b(get_retval(trace).rendered_clouds[i], trace[:camera_pose])
