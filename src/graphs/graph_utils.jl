@@ -107,7 +107,7 @@ end
 
 
 # Visualize Graph
-function render_graph(g_in::LG.SimpleDiGraph; dpi=500, names=nothing, colors=nothing,title=nothing)
+function render_graph(g_in::LG.SimpleDiGraph; dpi=500, names=nothing, colors=nothing,title=nothing, edge_labels=nothing)
 
     num_verts = LG.nv(g_in)
     
@@ -127,7 +127,7 @@ function render_graph(g_in::LG.SimpleDiGraph; dpi=500, names=nothing, colors=not
     end
     for e in LG.edges(g_in)
       g_out.edge(string(LG.src(e)),
-                 string(LG.dst(e)))
+                 string(LG.dst(e)), label=get(edge_labels, (LG.src(e),LG.dst(e)), ""))
     end
     g_out
 
