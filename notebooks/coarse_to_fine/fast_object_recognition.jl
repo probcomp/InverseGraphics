@@ -48,8 +48,8 @@ function object_recognition_and_pose_estimation(renderer, gt_cloud, v_resolution
                 T.uniform_mixture_from_template,
                 gt_cloud,
                 c,
-                v_resolution,
                 0.05,
+                0.01,
                 (-100.0,100.0,-100.0,100.0,-100.0,300.0)
             )
             
@@ -109,7 +109,7 @@ end
 
 
 unit_sphere_directions = T.fibonacci_sphere(300);
-other_rotation_angle = collect(0:0.1:(2*π));
+other_rotation_angle = collect(0:0.12:(2*π));
 rotations_to_enumerate_over = [
     let
         T.geodesicHopf_select_axis(StaticArrays.SVector(dir...), ang, 1)
@@ -127,22 +127,20 @@ cloud_lookup = [
             pose = Pose(position, rotations_to_enumerate_over[i,j])
             d = T.GL.gl_render(renderer, [id], [pose], IDENTITY_POSE);
             c = T.GL.depth_image_to_point_cloud(d, camera)
-            c .- position
+            c = T.get_points_in_frame_b(c, pose)
         end
         for i = 1:size(rotations_to_enumerate_over,1), j = 1:size(rotations_to_enumerate_over,2)
     ]
 for id in all_ids
 ];
+Serialization.serialize("render_caching_data.data", (cloud_lookup, rotations_to_enumerate_over, unit_sphere_directions, other_rotation_angle, dirs))
+
 
 function get_cloud_func_cached(p, id)
     idx1 = argmin(sum((dirs .- (p.orientation * [1,0,0])).^2, dims=1))[2]
     idx2 = argmin([abs(R.rotation_angle(inv(p.orientation) * r)) for r in rotations_to_enumerate_over[idx1,:]])
-    closest_orientation = rotations_to_enumerate_over[idx1,idx2]
-    c = T.move_points_to_frame_b(
-        T.get_points_in_frame_b(cloud_lookup[id][idx1,idx2], Pose(zeros(3), closest_orientation)),
-        p
-    )
-    c
+    # closest_orientation = rotations_to_enumerate_over[idx1,idx2]
+    c = T.move_points_to_frame_b(cloud_lookup[id][idx1,idx2], p)
 end
 
 renderer = setup_renderer()
