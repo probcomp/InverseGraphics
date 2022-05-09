@@ -1,4 +1,3 @@
-# -*- coding: utf-8 -*-
 import Revise
 import PoseComposition: Pose, IDENTITY_POSE, IDENTITY_ORN
 import InverseGraphics as T
