@@ -7,3 +7,4 @@ opencv-python
 open3d
 graphviz
 pybullet
+pyransac3d
