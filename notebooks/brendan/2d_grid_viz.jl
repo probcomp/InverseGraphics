@@ -1,10 +1,12 @@
+import Pkg
 using Revise
 Pkg.add("ProgressBars")
 using ProgressBars
 
-import Pkg
 ENV["PYTHON"] = "/usr/bin/python3"
 Pkg.build("PyCall")
+
+using Gen
 
 import GLRenderer as GL
 using Images
@@ -88,7 +90,13 @@ constraints[T.contact_addr(2, :parent_face)] = :back
 constraints[T.contact_addr(2, :x)] = 0.0
 constraints[T.contact_addr(2, :y)] = 0.0
 
-original_trace, _ = Gen.generate(T.scene, (params,), constraints);
+@gen (static) function scene_no_likelihood(model_params::T.SceneModelParameters)
+    camera_pose ~ T.uniformPose(-1000.0,1000.0,-1000.0,1000.0,-1000.0,1000.0)
+    scene_graph ~ T.scene_graph_prior(model_params)
+    return (scene_graph=scene_graph)
+end
+
+original_trace, _ = Gen.generate(scene_no_likelihood, (params,), constraints);
 Gen.get_choices(original_trace)
 
 slack_offset_sweep = 0.0:0.02:0.5
