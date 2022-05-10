@@ -12,8 +12,6 @@ camera_intrinsics = T.GL.CameraIntrinsics(
 	10000.0
 )
 
-
-
 mesh_names = ["cube_triangulated.obj",
               "sphere_triangulated.obj",
               "cylinder_small_triangulated.obj",
@@ -30,9 +28,6 @@ meshes = [
 data_path = joinpath(dirname(dirname(pathof(T))),"notebooks/coarse_to_fine/ibm_data")
 IDX = 345
 rgb_image = T.load_rgb(joinpath(data_path, "color_$(lpad(IDX,4,"0")).png"));
-IV.imshow(T.GL.view_rgb_image(rgb_image;in_255=true))
-
-d = d ./ 1000.0
 
 d = T.load_depth(joinpath(data_path, "depth_$(lpad(IDX,4,"0")).png"));
 d = d ./ 1000.0

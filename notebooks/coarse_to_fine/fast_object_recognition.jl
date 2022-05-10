@@ -7,6 +7,8 @@ import Gen
 import Open3DVisualizer as V
 import Rotations as R
 import StaticArrays
+import Serialization
+
 # Load YCB objects
 YCB_DIR = joinpath(dirname(dirname(pathof(T))),"data")
 world_scaling_factor = 10.0
@@ -27,8 +29,8 @@ function object_recognition_and_pose_estimation(renderer, gt_cloud, v_resolution
     centroid = T.centroid(gt_cloud);
 
 
-    for id in all_ids
-        for _ in 1:20
+    Threads.@threads for id in all_ids
+        for _ in 1:30
             # Intial random pose at centroid of observed cloud.
             start_pose = Pose(centroid, GDS.uniform_rot3())
             # Run ICP to refine that initial pose. (Use the KDTree to accelerate this.)
@@ -37,7 +39,7 @@ function object_recognition_and_pose_estimation(renderer, gt_cloud, v_resolution
                 gt_cloud,
                 p -> get_cloud_p_id(p, id);
                 c1_tree=c1_tree,
-                outer_iterations=6,
+                outer_iterations=4,
                 iterations=5
             );
             # Get (latent) cloud corresponding to object at refined_pose
@@ -133,8 +135,8 @@ cloud_lookup = [
     ]
 for id in all_ids
 ];
-Serialization.serialize("render_caching_data.data", (cloud_lookup, rotations_to_enumerate_over, unit_sphere_directions, other_rotation_angle, dirs))
-
+# Serialization.serialize("render_caching_data.data", (cloud_lookup, rotations_to_enumerate_over, unit_sphere_directions, other_rotation_angle, dirs))
+cloud_lookup, rotations_to_enumerate_over, unit_sphere_directions, other_rotation_angle, dirs = Serialization.deserialize("render_caching_data.data")
 
 function get_cloud_func_cached(p, id)
     idx1 = argmin(sum((dirs .- (p.orientation * [1,0,0])).^2, dims=1))[2]
@@ -156,17 +158,19 @@ gt_cloud = T.GL.depth_image_to_point_cloud(gt_depth, camera)
 @time best_object_id, best_latent_cloud = object_recognition_and_pose_estimation(renderer, gt_cloud, 0.01, get_cloud_func_cached)
 @show gt_object_id, best_object_id
 
-V.open_window();
-V.add(V.make_point_cloud(gt_cloud ;color=T.I.colorant"red"))
-V.add(V.make_point_cloud(best_latent_cloud; color=T.I.colorant"blue"))
-V.run()
 
-renderer = setup_renderer()
-cached_cloud = get_cloud_func_cached(gt_object_pose, gt_object_id);
-non_cached_cloud = get_cloud_func(gt_object_pose, gt_object_id);
-V.open_window();
-V.add(V.make_point_cloud(cached_cloud ;color=T.I.colorant"red"))
-V.add(V.make_point_cloud(non_cached_cloud; color=T.I.colorant"blue"))
-V.run()
+
+# V.open_window();
+# V.add(V.make_point_cloud(gt_cloud ;color=T.I.colorant"red"))
+# V.add(V.make_point_cloud(best_latent_cloud; color=T.I.colorant"blue"))
+# V.run()
+
+# renderer = setup_renderer()
+# cached_cloud = get_cloud_func_cached(gt_object_pose, gt_object_id);
+# non_cached_cloud = get_cloud_func(gt_object_pose, gt_object_id);
+# V.open_window();
+# V.add(V.make_point_cloud(cached_cloud ;color=T.I.colorant"red"))
+# V.add(V.make_point_cloud(non_cached_cloud; color=T.I.colorant"blue"))
+# V.run()
 
 
