@@ -29,7 +29,7 @@ function object_recognition_and_pose_estimation(renderer, gt_cloud, v_resolution
     centroid = T.centroid(gt_cloud);
 
 
-    Threads.@threads for id in all_ids
+    for id in all_ids
         for _ in 1:30
             # Intial random pose at centroid of observed cloud.
             start_pose = Pose(centroid, GDS.uniform_rot3())
@@ -67,10 +67,11 @@ function object_recognition_and_pose_estimation(renderer, gt_cloud, v_resolution
     best_latent_cloud = latent_clouds[best_hypothesis_index]
     best_object_id = ids[best_hypothesis_index]
 
-    best_object_id, best_latent_cloud
+    best_object_id, best_latent_cloud, (;latent_clouds, pose_hypotheses, likelihood_scores, ids)
 end
 
-camera = T.scale_down_camera(T.GL.CameraIntrinsics(), 4)
+camera_original = T.GL.CameraIntrinsics()
+camera = T.scale_down_camera(camera_original, 4)
 
 function setup_renderer()
     # Set up renderer with scaled down intrinsics: 160x120
@@ -89,7 +90,7 @@ renderer = setup_renderer()
 # Select random object id.
 gt_object_id = rand(all_ids)
 # Random pose.
-gt_object_pose = T.uniformPose(1.0, 1.0, -1.0, 1.0, 8.0, 12.0);
+gt_object_pose = T.uniformPose(1.0, 1.0, -1.0, 1.0, 4.0, 6.0);
 # Render depth.
 gt_depth = T.GL.gl_render(renderer, [gt_object_id], [gt_object_pose], IDENTITY_POSE);
 # Convert to point cloud.
@@ -101,17 +102,58 @@ function get_cloud_func(p, id)
     c
 end
 
-@time best_object_id, best_latent_cloud = object_recognition_and_pose_estimation(renderer, gt_cloud, 0.01, get_cloud_func)
+@time best_object_id, best_latent_cloud, data = object_recognition_and_pose_estimation(renderer, gt_cloud, 0.01, get_cloud_func)
 @show gt_object_id, best_object_id
 
-# V.open_window();
-# V.add(V.make_point_cloud(gt_cloud ;color=T.I.colorant"red"))
-# V.add(V.make_point_cloud(best_latent_cloud; color=T.I.colorant"blue"))
+V.open_window(camera_original, IDENTITY_POSE);
+
+import FileIO
+V.clear()
+V.add(V.make_point_cloud(T.voxelize(gt_cloud, 0.05) ;color=T.I.colorant"red"))
+V.set_camera_intrinsics_and_pose(camera_original, IDENTITY_POSE)
+V.sync()
+
+img = V.capture_image();
+FileIO.save("gt.png", T.GL.view_rgb_image(img))
+
+
+V.add(V.make_point_cloud(best_latent_cloud; color=T.I.colorant"blue"))
+V.set_camera_intrinsics_and_pose(camera_original, IDENTITY_POSE)
+V.sync()
+
+img = V.capture_image();
+FileIO.save("pred.png", T.GL.view_rgb_image(img))
+
+for i in 1:100
+    c = rand(data.latent_clouds)
+    V.clear()
+    V.add(V.make_point_cloud(T.voxelize(gt_cloud, 0.05) ;color=T.I.colorant"red"))
+
+    V.add(V.make_point_cloud(c; color=T.I.colorant"blue"))
+    V.set_camera_intrinsics_and_pose(camera_original, IDENTITY_POSE)
+    V.sync()
+    img = V.capture_image();
+    FileIO.save("/tmp/$(i).png", T.GL.view_rgb_image(img))
+end
+
+img_sequence = [FileIO.load("/tmp/$(t).png") for t in 1:100];
+gif = cat(img_sequence...;dims=3);
+FileIO.save("options.gif", gif);
+
+
+
+
+import FileIO
+
+V.run()
+
+V.destroy()
+
 # V.run()
 
 
-unit_sphere_directions = T.fibonacci_sphere(300);
-other_rotation_angle = collect(0:0.12:(2*π));
+unit_sphere_directions = T.fibonacci_sphere(500);
+other_rotation_angle = collect(0:0.13:(2*π));
 rotations_to_enumerate_over = [
     let
         T.geodesicHopf_select_axis(StaticArrays.SVector(dir...), ang, 1)
@@ -122,6 +164,8 @@ rotations_to_enumerate_over = [
 @show length(rotations_to_enumerate_over)
 dirs = hcat(unit_sphere_directions...)
 
+cloud_lookup = Matrix{Any}(zeros(size(rotations_to_enumerate_over)...))
+
 cloud_lookup = [
     [
         let
@@ -130,6 +174,7 @@ cloud_lookup = [
             d = T.GL.gl_render(renderer, [id], [pose], IDENTITY_POSE);
             c = T.GL.depth_image_to_point_cloud(d, camera)
             c = T.get_points_in_frame_b(c, pose)
+            c = T.voxelize(c, 0.005)
         end
         for i = 1:size(rotations_to_enumerate_over,1), j = 1:size(rotations_to_enumerate_over,2)
     ]
@@ -159,11 +204,10 @@ gt_cloud = T.GL.depth_image_to_point_cloud(gt_depth, camera)
 @show gt_object_id, best_object_id
 
 
-
-# V.open_window();
-# V.add(V.make_point_cloud(gt_cloud ;color=T.I.colorant"red"))
-# V.add(V.make_point_cloud(best_latent_cloud; color=T.I.colorant"blue"))
-# V.run()
+V.open_window();
+V.add(V.make_point_cloud(gt_cloud ;color=T.I.colorant"red"))
+V.add(V.make_point_cloud(best_latent_cloud; color=T.I.colorant"blue"))
+V.run()
 
 # renderer = setup_renderer()
 # cached_cloud = get_cloud_func_cached(gt_object_pose, gt_object_id);

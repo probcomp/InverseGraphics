@@ -1,4 +1,5 @@
 using DataStructures
+import LinearAlgebra
 
 @dist labeled_categorical(labels, probs) = labels[Gen.categorical(probs)]
 
@@ -123,6 +124,13 @@ function fibonacci_sphere(samples)
     return points
 end
 
+function norm(v)
+    LinearAlgebra.norm(v)
+end
+
+function normalize(v)
+    v ./ LinearAlgebra.norm(v)
+end
 
 
 export voxelize, min_max, discretize, center_cloud, pose_distance
