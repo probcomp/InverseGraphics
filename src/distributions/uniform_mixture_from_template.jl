@@ -84,7 +84,7 @@ function Gen.logpdf(
     m = size(X, 2)
     n = size(Y, 2)
     logp_numpoints = Gen.logpdf(geometric, n,
-                                0.5)
+                                1e-5)
                                 # _UniformMixtureFromTemplate_p_numpoints_Y(m))
     r = radius
 
