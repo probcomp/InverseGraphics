@@ -67,21 +67,16 @@ dirs = hcat(unit_sphere_directions...)
 
 cloud_lookup, rotations_to_enumerate_over, unit_sphere_directions, other_rotation_angle, dirs = Serialization.deserialize("render_caching_data.data")
 
-function lookup_closet_cache_index(p)
-	idx1 = argmin(sum((dirs .- (p.orientation * [1,0,0])).^2, dims=1))[2]
-	idx2 = argmin([abs(R.rotation_angle(inv(p.orientation) * r)) for r in rotations_to_enumerate_over[idx1,:]])
-	idx1,idx2
-end
-
 function get_cloud_cached(p, id)
     cam_pose = T.Pose(zeros(3),R.RotX(-asin(p.pos[2] / p.pos[3])) * R.RotY(asin(p.pos[1] / p.pos[3])))
-    idx1,idx2 = lookup_closet_cache_index(inv(cam_pose) * p)
+    idx1 = argmin(sum((dirs .- (p.orientation * [1,0,0])).^2, dims=1))[2]
+    idx2 = argmin([abs(R.rotation_angle(inv(p.orientation) * r)) for r in rotations_to_enumerate_over[idx1,:]])
     cached_cloud = T.move_points_to_frame_b(cloud_lookup[id,idx1,idx2], p)
 end
 
 MV.setup_visualizer()
 
-p = Pose([1.0, -1.0, 10.0], GDS.uniform_rot3())
+p = Pose([1.0, -1.0, 6.0], GDS.uniform_rot3())
 id = 15
 
 d = T.GL.gl_render(renderer, [id], [p], IDENTITY_POSE);
@@ -93,7 +88,7 @@ actual_cloud = T.voxelize(
 
 MV.reset_visualizer()
 MV.viz(actual_cloud ./ 10.0; color=T.I.colorant"green", channel_name=:a)
-cached_cloud = get_cloud_cached(p, id)
+@time cached_cloud = get_cloud_cached(p, id)
 MV.reset_visualizer()
 MV.viz(cached_cloud ./ 10.0; color=T.I.colorant"blue", channel_name=:b)
 
