@@ -28,7 +28,7 @@ end
 
 function get_boundary_mask(cloud::Matrix, bbox::S.Box, bbox_pose::Pose, wall_epsilon::Real, floor_epsilon::Real)
     c = copy(cloud)
-    c_centered = T.get_points_in_frame_b(c[1:3,:], bbox_pose)
+    c_centered = get_points_in_frame_b(c[1:3,:], bbox_pose)
     mask = fill(true, size(c_centered)[2])
     mask[c_centered[2,:] .> bbox.sizeY/2.0 - floor_epsilon] .= false
     mask[c_centered[2,:] .< -bbox.sizeY/2.0 + floor_epsilon] .= false

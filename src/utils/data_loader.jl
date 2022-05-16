@@ -299,3 +299,12 @@ function load_synthetic_objposenet_fusion_predictions(SYTH_DIR, T)
     ];
     densefusion_poses, densefusion_ids
 end
+
+function temp_file_name(t::Int)
+    "/tmp/$(lpad(t,6,'0')).png"
+end
+
+function gif_from_filenames(filenames)
+    imgs = FileIO.load.(filenames)
+    cat(imgs...;dims=3)
+end
