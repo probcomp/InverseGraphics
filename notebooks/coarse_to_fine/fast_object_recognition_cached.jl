@@ -18,61 +18,6 @@ id_to_cloud, id_to_shift, id_to_box  = T.load_ycbv_models_adjusted(YCB_DIR, worl
 all_ids = sort(collect(keys(id_to_cloud)));
 names = T.load_ycb_model_list(YCB_DIR)
 
-
-function object_recognition_and_pose_estimation(renderer, gt_cloud, v_resolution, get_cloud_p_id)
-    gt_cloud = T.voxelize(gt_cloud, v_resolution)
-
-    # Make KDTree on observed point cloud
-    c1_tree = NearestNeighbors.KDTree(gt_cloud);
-    centroid = T.centroid(gt_cloud);
-
-    iters = 30
-    pose_hypotheses = Matrix{Any}(zeros(length(all_ids), iters))
-    latent_clouds = Matrix{Any}(zeros(length(all_ids), iters))
-    likelihood_scores = Matrix{Any}(zeros(length(all_ids), iters))
-
-    Threads.@threads for id in all_ids
-        Threads.@threads for iter in 1:iters
-            # Intial random pose at centroid of observed cloud.
-            start_pose = Pose(centroid, GDS.uniform_rot3())
-            # Run ICP to refine that initial pose. (Use the KDTree to accelerate this.)
-            refined_pose = T.icp_object_pose(
-                start_pose,
-                gt_cloud,
-                p -> get_cloud_p_id(p, id);
-                c1_tree=c1_tree,
-                outer_iterations=5,
-                iterations=2
-            );
-            # Get (latent) cloud corresponding to object at refined_pose
-            c = get_cloud_p_id(refined_pose, id)
-            # Compute the probability of the observed cloud being generated from the latent cloud.
-            # This is the 3DP3 likelihood.
-            score = Gen.logpdf(
-                # T.uniform_mixture_from_template,
-                T.volume_cloud_likelihood,
-                gt_cloud,
-                c,
-                v_resolution,
-                0.1,
-                (-100.0,100.0,-100.0,100.0,-100.0,300.0)
-            )
-            
-            pose_hypotheses[id,iter] = refined_pose
-            latent_clouds[id,iter] = c
-            likelihood_scores[id,iter] = score
-        end
-    end
-    
-    # Get best scoring hypothesis, cloud, id
-    best_hypothesis_index = argmax(likelihood_scores)
-    best_latent_cloud = latent_clouds[best_hypothesis_index]
-    best_object_id = best_hypothesis_index[1]
-
-    best_object_id, best_latent_cloud, likelihood_scores[best_hypothesis_index], (;latent_clouds, pose_hypotheses, likelihood_scores)
-end
-
-
 camera_original = T.GL.CameraIntrinsics()
 camera = T.scale_down_camera(camera_original, 4)
 
@@ -95,6 +40,9 @@ function get_cloud_cached(p, id)
     idx1 = argmin(sum((dirs .- (p.orientation * [1,0,0])).^2, dims=1))[2]
     idx2 = argmin([abs(R.rotation_angle(inv(p.orientation) * r)) for r in rotations_to_enumerate_over[idx1,:]])
     cached_cloud = T.move_points_to_frame_b(cloud_lookup[id,idx1,idx2], p)
+    pixel_coords = T.GL.point_cloud_to_pixel_coordinates(cached_cloud, camera)
+    idxs = (0 .< pixel_coords[1,:] .< camera.width) .& (0 .< pixel_coords[2,:] .< camera.height)
+    cached_cloud = cached_cloud[:, idxs]
 end
 
 MV.setup_visualizer()
@@ -103,34 +51,81 @@ MV.setup_visualizer()
 
 renderer = setup_renderer()
 
+
 # Select random object id.
 gt_object_id = rand(all_ids)
 # Random pose.
-gt_object_pose = T.uniformPose(1.0, 1.0, -1.0, 1.0, 5.0, 12.0);
+gt_object_pose = T.uniformPose(2.0, 2.0, -2.0, 2.0, 5.0, 20.0);
 # Render depth.
 gt_depth = T.GL.gl_render(renderer, [gt_object_id], [gt_object_pose], IDENTITY_POSE);
 # Convert to point cloud.
 gt_cloud = T.GL.depth_image_to_point_cloud(gt_depth, camera)
 
-@time best_object_id, best_latent_cloud, score = object_recognition_and_pose_estimation(renderer, gt_cloud, 0.01, get_cloud_cached);
+@time best_object_id, best_latent_cloud, best_pose, likelihood_scores, _ = T.object_recognition_and_pose_estimation(renderer, all_ids,gt_cloud, 0.01, get_cloud_cached);
+@show gt_object_pose, best_pose
 @show gt_object_id, best_object_id
 @show score
 
+results_dir = "object_recognition_evaluation"
+mkdir(results_dir)
+
+for iter in 1:10000
+    # Select random object id.
+    gt_object_id = rand(all_ids)
+    # Random pose.
+    gt_object_pose = T.uniformPose(2.0, 2.0, -2.0, 2.0, 5.0, 20.0);
+    # Render depth.
+    gt_depth = T.GL.gl_render(renderer, [gt_object_id], [gt_object_pose], IDENTITY_POSE);
+    # Convert to point cloud.
+    gt_cloud = T.GL.depth_image_to_point_cloud(gt_depth, camera)
+
+    best_object_id, best_latent_cloud, best_pose, likelihood_scores, _ = T.object_recognition_and_pose_estimation(renderer, all_ids,gt_cloud, 0.01, get_cloud_cached);
+    Serialization.serialize(joinpath(results_dir, "$(lpad(iter, 6, '0')).data"), (gt_object_id, gt_object_pose, best_object_id, best_pose, likelihood_scores))
+end
+
+
+right = 0
+wrong = 0
+wrong_examples = []
+for iter in 1:10000
+    (gt_object_id, gt_object_pose, best_object_id, best_pose, likelihood_scores) = Serialization.deserialize(joinpath(results_dir, "$(lpad(iter, 6, '0')).data"))
+    if gt_object_id == best_object_id
+        right += 1
+    else
+        wrong += 1
+        push!(wrong_examples, (gt_object_id, gt_object_pose, best_object_id, best_pose, likelihood_scores))
+    end
+end
+@show right, wrong
+@show right / (right + wrong)
+
+index = 10
+gt_object_id, gt_object_pose, best_object_id, best_pose, likelihood_scores = wrong_examples[index];
+# Render depth.
+gt_depth = T.GL.gl_render(renderer, [gt_object_id], [gt_object_pose], IDENTITY_POSE);
+# Convert to point cloud.
+gt_cloud = T.GL.depth_image_to_point_cloud(gt_depth, camera);
+@show gt_object_id, best_object_id
+@show maximum(likelihood_scores)
+MV.reset_visualizer()
+MV.viz(gt_cloud ./ 10.0; color=T.I.colorant"black", channel_name=:a)
+MV.viz(get_cloud_cached(best_pose, best_object_id) ./ 10.0; color=T.I.colorant"red", channel_name=:b)
+@time best_object_id, best_latent_cloud, best_pose, likelihood_scores, _ = T.object_recognition_and_pose_estimation(renderer, all_ids,gt_cloud, 0.01, get_cloud_cached);
+@show gt_object_id, best_object_id
+@show maximum(likelihood_scores)
 MV.reset_visualizer()
 MV.viz(gt_cloud ./ 10.0; color=T.I.colorant"black", channel_name=:a)
 MV.viz(best_latent_cloud ./ 10.0; color=T.I.colorant"red", channel_name=:b)
 
 
-V.open_window();
-V.add(V.make_point_cloud(gt_cloud ;color=T.I.colorant"red"))
-V.add(V.make_point_cloud(best_latent_cloud; color=T.I.colorant"blue"))
-V.run()
 
-# renderer = setup_renderer()
-# cached_cloud = get_cloud_func_cached(gt_object_pose, gt_object_id);
-# non_cached_cloud = get_cloud_func(gt_object_pose, gt_object_id);
-# V.open_window();
-# V.add(V.make_point_cloud(cached_cloud ;color=T.I.colorant"red"))
-# V.add(V.make_point_cloud(non_cached_cloud; color=T.I.colorant"blue"))
-# V.run()
+
+@show Gen.logpdf(
+    T.volume_cloud_likelihood,
+    T.voxelize(gt_cloud, 0.01),
+    best_latent_cloud,
+    0.01,
+    0.1,
+    (-100.0,100.0,-100.0,100.0,-100.0,300.0)
+)
 

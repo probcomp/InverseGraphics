@@ -44,6 +44,7 @@ include("model/sg_model_utils.jl")
 include("inference/inference.jl")
 
 include("feature_detection/feature_detection.jl")
+include("object_recognition/icp_object_recognition.jl")
 
 include("mcs/mcs_utils.jl")
 
