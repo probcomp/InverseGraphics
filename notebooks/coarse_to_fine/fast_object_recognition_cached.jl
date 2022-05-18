@@ -64,7 +64,6 @@ gt_cloud = T.GL.depth_image_to_point_cloud(gt_depth, camera)
 @time best_object_id, best_latent_cloud, best_pose, likelihood_scores, _ = T.object_recognition_and_pose_estimation(renderer, all_ids,gt_cloud, 0.01, get_cloud_cached);
 @show gt_object_pose, best_pose
 @show gt_object_id, best_object_id
-@show score
 
 results_dir = "object_recognition_evaluation"
 mkdir(results_dir)
@@ -99,7 +98,13 @@ end
 @show right, wrong
 @show right / (right + wrong)
 
-index = 10
+counts = zeros(length(all_ids))
+for (id,_,_,_,_) in wrong_examples
+    counts[id] += 1
+end
+counts
+
+index = 12
 gt_object_id, gt_object_pose, best_object_id, best_pose, likelihood_scores = wrong_examples[index];
 # Render depth.
 gt_depth = T.GL.gl_render(renderer, [gt_object_id], [gt_object_pose], IDENTITY_POSE);
@@ -108,8 +113,8 @@ gt_cloud = T.GL.depth_image_to_point_cloud(gt_depth, camera);
 @show gt_object_id, best_object_id
 @show maximum(likelihood_scores)
 MV.reset_visualizer()
-MV.viz(gt_cloud ./ 10.0; color=T.I.colorant"black", channel_name=:a)
-MV.viz(get_cloud_cached(best_pose, best_object_id) ./ 10.0; color=T.I.colorant"red", channel_name=:b)
+MV.viz(gt_cloud ./ 30.0; color=T.I.colorant"black", channel_name=:a)
+MV.viz(get_cloud_cached(best_pose, best_object_id) ./ 30.0; color=T.I.colorant"red", channel_name=:b)
 @time best_object_id, best_latent_cloud, best_pose, likelihood_scores, _ = T.object_recognition_and_pose_estimation(renderer, all_ids,gt_cloud, 0.01, get_cloud_cached);
 @show gt_object_id, best_object_id
 @show maximum(likelihood_scores)
@@ -117,6 +122,36 @@ MV.reset_visualizer()
 MV.viz(gt_cloud ./ 10.0; color=T.I.colorant"black", channel_name=:a)
 MV.viz(best_latent_cloud ./ 10.0; color=T.I.colorant"red", channel_name=:b)
 
+clouds = []
+for i in 1:100
+    gt_object_id, gt_object_pose, best_object_id, best_pose, likelihood_scores = wrong_examples[index];
+    # Render depth.
+    gt_depth = T.GL.gl_render(renderer, [gt_object_id], [gt_object_pose], IDENTITY_POSE);
+    # Convert to point cloud.
+    gt_cloud = T.GL.depth_image_to_point_cloud(gt_depth, camera);
+    push!(clouds, gt_cloud)
+end
+
+V.open_window(camera, T.IDENTITY_POSE)
+V.open_window()
+for i in 1:100
+    V.clear()
+    V.make_point_cloud(clouds[i];color=T.I.colorant"red")
+    T.FileIO.save("gt_$(i).png", T.GL.view_rgb_image(V.capture_image()))
+
+    gt_object_id, gt_object_pose, best_object_id, best_pose, likelihood_scores = wrong_examples[index];
+
+    V.clear()
+    V.make_point_cloud(get_cloud_cached(best_pose, best_object_id);color=T.I.colorant"black")
+    T.FileIO.save("pred_$(i).png", T.GL.view_rgb_image(V.capture_image()))
+end
+
+index = 11
+gt_object_id, gt_object_pose, best_object_id, best_pose, likelihood_scores = wrong_examples[index];
+# Render depth.
+gt_depth = T.GL.gl_render(renderer, [gt_object_id], [gt_object_pose], IDENTITY_POSE);
+# Convert to point cloud.
+gt_cloud = T.GL.depth_image_to_point_cloud(gt_depth, camera);
 
 
 

@@ -1,6 +1,6 @@
 import GenDirectionalStats: uniform_rot3
 
-function object_recognition_and_pose_estimation(renderer, all_ids, gt_cloud, v_resolution, get_cloud_p_id; num_particles=50)
+function object_recognition_and_pose_estimation(renderer, all_ids, gt_cloud, v_resolution, get_cloud_p_id; num_particles=30)
     gt_cloud = voxelize(gt_cloud, v_resolution)
 
     # Make KDTree on observed point cloud

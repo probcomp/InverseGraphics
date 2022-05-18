@@ -26,11 +26,11 @@ function axis_aligned_bounding_box(point_clouds::Vector{Matrix{TYPE}}) where TYP
     (bbox=S.Box((maxs .- mins)...), pose=Pose([((mins .+ maxs) ./ 2.0)[:]...]))
 end
 
-function get_boundary_mask(cloud::Matrix, bbox::S.Box, bbox_pose::Pose, wall_epsilon::Real, floor_epsilon::Real)
+function get_boundary_mask(cloud::Matrix, bbox::S.Box, bbox_pose::Pose, wall_epsilon::Real, floor_epsilon::Real, ceiling_epsilon::Real)
     c = copy(cloud)
     c_centered = get_points_in_frame_b(c[1:3,:], bbox_pose)
     mask = fill(true, size(c_centered)[2])
-    mask[c_centered[2,:] .> bbox.sizeY/2.0 - floor_epsilon] .= false
+    mask[c_centered[2,:] .> bbox.sizeY/2.0 - ceiling_epsilon] .= false
     mask[c_centered[2,:] .< -bbox.sizeY/2.0 + floor_epsilon] .= false
     mask[c_centered[1,:] .> bbox.sizeX/2.0 - wall_epsilon] .= false
     mask[c_centered[1,:] .< -bbox.sizeX/2.0 + wall_epsilon] .= false
@@ -39,9 +39,9 @@ function get_boundary_mask(cloud::Matrix, bbox::S.Box, bbox_pose::Pose, wall_eps
     mask
 end
 
-function subtract_boundary(cloud::Matrix,  bbox::S.Box, bbox_pose::Pose, wall_epsilon::Real, floor_epsilon::Real)
+function subtract_boundary(cloud::Matrix, bbox::S.Box, bbox_pose::Pose, wall_epsilon::Real, floor_epsilon::Real, ceiling_epsilon::Real)
     c = copy(cloud)
-    c[:, get_boundary_mask(cloud, bbox, bbox_pose, wall_epsilon, floor_epsilon)]
+    c[:, get_boundary_mask(cloud, bbox, bbox_pose, wall_epsilon, floor_epsilon, ceiling_epsilon)]
 end
 
 
