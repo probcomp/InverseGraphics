@@ -1,22 +1,25 @@
-import PyCall
-import MiniGSG as S
-import PoseComposition as P
-import PoseComposition: Pose, IDENTITY_ORN, IDENTITY_POSE
-import Images as I
-import Rotations as R
-import GLRenderer as GL
 import InverseGraphics as T
-import ImageView as IV
 import Open3DVisualizer as V
 
+intrinsics = T.GL.CameraIntrinsics()
+renderer = T.GL.setup_renderer(intrinsics, T.GL.DepthMode();gl_version=(4,1))
+box = T.GL.box_mesh_from_dims([1.0,2.0,3.0])
+T.GL.load_object!(renderer, box)
 
-YCB_DIR = joinpath(dirname(dirname(pathof(T))),"data")
-world_scaling_factor = 1.0
-id_to_cloud, id_to_shift, id_to_box  = T.load_ycbv_models_adjusted(YCB_DIR, world_scaling_factor);
-all_ids = sort(collect(keys(id_to_cloud)));
-names = T.load_ycb_model_list(YCB_DIR)
+T.GL.activate_renderer(renderer)
+depth_image = T.GL.gl_render(renderer, [1],[T.Pose(0.0, 0.0, 10.0)], T.IDENTITY_POSE);
+T.FileIO.save("depth.png", T.GL.view_depth_image(depth_image))
 
+V.open_window()
+V.clear()
+V.make_point_cloud(T.GL.depth_image_to_point_cloud(depth_image, intrinsics))
+V.make_point_cloud(rand(3,100))
+V.make_axes(1.0)
+V.sync()
+
+V.destroy()
 IDX = 900
+
 # Load scene data.
 #    gt_poses : Ground truth 6D poses of objects (in the camera frame)
 #    ids      : object ids (order corresponds to the gt_poses list)

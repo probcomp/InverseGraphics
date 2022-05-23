@@ -7,7 +7,7 @@ end
 function xz_plane_aligned_bounding_box(point_cloud::Matrix, resolution::Real)
     cv2 = PyCall.pyimport("cv2")
     np = PyCall.pyimport("numpy")
-    proj_onto_xz = GL.voxelize(vcat(point_cloud[1,:]',point_cloud[3, :]'), resolution)
+    proj_onto_xz = GL.voxelize(vcat(point_cloud[1,:]', point_cloud[3, :]'), resolution)
     rect = cv2.minAreaRect(np.array(permutedims(proj_onto_xz), dtype="float32"))
     ((cx,cz), (width, height), rotation) = rect
     bottom, top = min_max(point_cloud[2, :])
