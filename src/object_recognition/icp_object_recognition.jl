@@ -1,6 +1,6 @@
 import GenDirectionalStats: uniform_rot3
 
-function object_recognition_and_pose_estimation(renderer, all_ids, gt_cloud, v_resolution, get_cloud_p_id; num_particles=30)
+function object_recognition_and_pose_estimation(camera, all_ids, gt_cloud, v_resolution, get_cloud_p_id; num_particles=30)
     gt_cloud = voxelize(gt_cloud, v_resolution)
 
     # Make KDTree on observed point cloud
@@ -19,13 +19,13 @@ function object_recognition_and_pose_estimation(renderer, all_ids, gt_cloud, v_r
             refined_pose = icp_object_pose(
                 start_pose,
                 gt_cloud,
-                p -> get_cloud_p_id(p, id);
+                p -> get_cloud_p_id(p, id, camera);
                 c1_tree=c1_tree,
                 outer_iterations=5,
                 iterations=3
             );
             # Get (latent) cloud corresponding to object at refined_pose
-            c = get_cloud_p_id(refined_pose, id)
+            c = get_cloud_p_id(refined_pose, id, camera)
             # Compute the probability of the observed cloud being generated from the latent cloud.
             # This is the 3DP3 likelihood.
             score = Gen.logpdf(

@@ -35,10 +35,12 @@ end
 
 cloud_lookup, rotations_to_enumerate_over, unit_sphere_directions, other_rotation_angle, dirs = Serialization.deserialize("render_caching_data.data")
 
-function get_cloud_cached(p, id)
+
+function get_cloud_cached(p, id, camera)
     cam_pose = T.Pose(zeros(3),R.RotX(-asin(p.pos[2] / p.pos[3])) * R.RotY(asin(p.pos[1] / p.pos[3])))
-    idx1 = argmin(sum((dirs .- (p.orientation * [1,0,0])).^2, dims=1))[2]
-    idx2 = argmin([abs(R.rotation_angle(inv(p.orientation) * r)) for r in rotations_to_enumerate_over[idx1,:]])
+    adjusted_pose = inv(cam_pose) * p
+    idx1 = argmin(sum((dirs .- (adjusted_pose.orientation * [1,0,0])).^2, dims=1))[2]
+    idx2 = argmin([abs(R.rotation_angle(inv(adjusted_pose.orientation) * r)) for r in rotations_to_enumerate_over[idx1,:]])
     cached_cloud = T.move_points_to_frame_b(cloud_lookup[id,idx1,idx2], p)
     pixel_coords = T.GL.point_cloud_to_pixel_coordinates(cached_cloud, camera)
     idxs = (0 .< pixel_coords[1,:] .< camera.width) .& (0 .< pixel_coords[2,:] .< camera.height)
@@ -61,7 +63,8 @@ gt_depth = T.GL.gl_render(renderer, [gt_object_id], [gt_object_pose], IDENTITY_P
 # Convert to point cloud.
 gt_cloud = T.GL.depth_image_to_point_cloud(gt_depth, camera)
 
-@time best_object_id, best_latent_cloud, best_pose, likelihood_scores, _ = T.object_recognition_and_pose_estimation(renderer, all_ids,gt_cloud, 0.01, get_cloud_cached);
+best_object_id, best_latent_cloud, best_pose, likelihood_scores, _ = T.object_recognition_and_pose_estimation(
+    renderer.camera_intrinsics, all_ids,gt_cloud, 0.01, get_cloud_cached);
 @show gt_object_pose, best_pose
 @show gt_object_id, best_object_id
 
@@ -78,10 +81,12 @@ for iter in 1:10000
     # Convert to point cloud.
     gt_cloud = T.GL.depth_image_to_point_cloud(gt_depth, camera)
 
-    best_object_id, best_latent_cloud, best_pose, likelihood_scores, _ = T.object_recognition_and_pose_estimation(renderer, all_ids,gt_cloud, 0.01, get_cloud_cached);
+    best_object_id, best_latent_cloud, best_pose, likelihood_scores, _ = T.object_recognition_and_pose_estimation(renderer.camera_intrinsics, all_ids,gt_cloud, 0.01, get_cloud_cached);
     Serialization.serialize(joinpath(results_dir, "$(lpad(iter, 6, '0')).data"), (gt_object_id, gt_object_pose, best_object_id, best_pose, likelihood_scores))
 end
 
+
+## Evaluation
 
 right = 0
 wrong = 0
