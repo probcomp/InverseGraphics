@@ -223,6 +223,13 @@ function scale_and_shift_mesh(mesh, world_scaling_factor::Vector, shift)
     mesh_copy
 end
 
+
+function shift_mesh_to_pose(mesh, pose::Pose)
+    mesh_copy = GL.copy_mesh(mesh)
+    mesh_copy.vertices = move_points_to_frame_b(mesh.vertices, pose)
+    mesh_copy
+end
+
 function scale_mesh(mesh::GL.Mesh, scaling_factor::Real)
     mesh_copy = GL.copy_mesh(mesh)
     mesh_copy.vertices = (mesh_copy.vertices * scaling_factor)

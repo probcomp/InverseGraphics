@@ -132,5 +132,9 @@ function normalize(v)
     v ./ LinearAlgebra.norm(v)
 end
 
+function color_to_array(color)
+    [color.r, color.g, color.b]
+end
+
 
 export voxelize, min_max, discretize, center_cloud, pose_distance
