@@ -1,8 +1,9 @@
 import GeometryBasics: Point
 
-function get_dims(box::S.Box)
+function get_dims(box::Union{S.Box, S.BoxContainer})
     [box.sizeX, box.sizeY, box.sizeZ]
 end
+
 
 function xz_plane_aligned_bounding_box(point_cloud::Matrix, resolution::Real)
     cv2 = PyCall.pyimport("cv2")
@@ -45,7 +46,7 @@ function subtract_boundary(cloud::Matrix, bbox::S.Box, bbox_pose::Pose, wall_eps
 end
 
 
-function get_bbox_corners(bbox::S.Box, pose::Pose)
+function get_bbox_corners(bbox::Union{S.Box, S.BoxContainer}, pose::Pose)
     x,y,z = get_dims(bbox) ./ 2
     nominal_corners = collect([
         -x -y -z;
@@ -60,13 +61,13 @@ function get_bbox_corners(bbox::S.Box, pose::Pose)
     corners = move_points_to_frame_b(nominal_corners, pose)
 end
 
-function get_bbox_corners_projected_to_xz(bbox::S.Box, pose::Pose)
+function get_bbox_corners_projected_to_xz(bbox::Union{S.Box, S.BoxContainer}, pose::Pose)
     corners = get_bbox_corners(bbox,pose)
     corners[:, [1,3,5,7,1]]
 end
 
 
-function get_bbox_segments_point_list(bbox::S.Box, pose::Pose)
+function get_bbox_segments_point_list(bbox::Union{S.Box, S.BoxContainer}, pose::Pose)
     x,y,z = get_dims(bbox) ./ 2
     nominal_corners = collect([
         # bottom square
