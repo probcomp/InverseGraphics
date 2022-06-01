@@ -112,3 +112,31 @@ function get_bbox_segments_point_list(bbox::Union{S.Box, S.BoxContainer}, pose::
     corners = move_points_to_frame_b(nominal_corners, pose)
     Point.(corners[1,:],corners[2,:], corners[3,:])
 end
+
+function get_bbox_points_and_lines(box::Union{S.Box,S.BoxContainer}, pose::Pose)
+    points = Matrix{Float64}(undef, 3, 8)
+    points[:,1] = [box.sizeX/2, -box.sizeY/2, box.sizeZ/2] # blue 
+    points[:,2] = [-box.sizeX/2, -box.sizeY/2, box.sizeZ/2] # orange
+    points[:,3] = [-box.sizeX/2, box.sizeY/2, box.sizeZ/2] # green
+    points[:,4] = [box.sizeX/2, box.sizeY/2, box.sizeZ/2] # red
+    points[:,5] = [box.sizeX/2, -box.sizeY/2, -box.sizeZ/2] # purple
+    points[:,6] = [-box.sizeX/2, -box.sizeY/2, -box.sizeZ/2] # brown
+    points[:,7] = [-box.sizeX/2, box.sizeY/2, -box.sizeZ/2] # pink
+    points[:,8] = [box.sizeX/2, box.sizeY/2, -box.sizeZ/2] # yellow
+    points = move_points_to_frame_b(points, pose)
+    lines = permutedims([ 
+        1 2;
+        2 3;
+        3 4;
+        4 1;
+        5 6;
+        6 7;
+        7 8;
+        8 5;
+        1 5;
+        2 6;
+        3 7;
+        4 8 
+    ])
+    points, lines
+end
