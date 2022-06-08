@@ -28,7 +28,6 @@ import GeometryBasics: Point, Mesh, GLTriangleFace, HyperSphere
 import GenDirectionalStats as GDS
 
 camera = GL.CameraIntrinsics()
-camera = GL.scale_down_camera(camera, 4)
 renderer = GL.setup_renderer(camera, GL.DepthMode();gl_version=(3,3))
 
 object_boxes = [S.Box(1.0, 1.0, 1.0), S.Box(1.5, 1.5, 1.5)]
@@ -72,6 +71,7 @@ params = T.SceneModelParameters(
     ids=ids,
 );
 
+
 function Gen.random(
     ::T.UniformMixtureFromTemplateMultiCloud, X::Array{Matrix{Float64}},
     p_outlier::Float64, radius::Float64, bounds::Tuple)
@@ -85,15 +85,15 @@ constraints[T.structure_addr()] = g
 constraints[T.floating_pose_addr(1)] = IDENTITY_POSE
 constraints[:p_outlier] = hypers.p_outlier
 constraints[:noise] = hypers.noise
-constraints[T.contact_addr(2, :child_face)] = :back
-constraints[T.contact_addr(2, :parent_face)] = :back
+constraints[T.contact_addr(2, :parent_face)] = :top
+constraints[T.contact_addr(2, :child_face)] = :bottom
 constraints[T.contact_addr(2, :x)] = 0.0
 constraints[T.contact_addr(2, :y)] = 0.0
 
-@gen (static) function scene_no_likelihood(model_params::T.SceneModelParameters)
+@gen  function scene_no_likelihood(model_params::T.SceneModelParameters)
     camera_pose ~ T.uniformPose(-1000.0,1000.0,-1000.0,1000.0,-1000.0,1000.0)
     scene_graph ~ T.scene_graph_prior(model_params)
-    return (scene_graph=scene_graph)
+    return (scene_graph=scene_graph, a=1)
 end
 
 original_trace, _ = Gen.generate(scene_no_likelihood, (params,), constraints);
@@ -135,19 +135,23 @@ for i in eachindex(traces)
 
     rgb_image, depth_image = GL.gl_render(
         rgb_renderer, ids, T.get_poses(trace), 
-        Pose(0, 0, -5); colors=[I.colorant"red", I.colorant"blue"],
+        Pose(0, 0, -5); colors=[T.I.colorant"red", T.I.colorant"blue"],
     )
 
     images[i] = rgb_image
 end
 
+T.FileIO.save("mccoy.png", T.GL.view_rgb_image(images[end,end]))
+
+
 proportion_with_edge = zeros(size(traces))
 
-for i in ProgressBar(eachindex(traces))
+for i in eachindex(traces)
     trace = traces[i]
     
     num_with_edges = 0.0
-    for _ in 1:20
+    num_involutive_moves = 50
+    for _ in 1:num_involutive_moves
         trace, acc = T.toggle_edge_move(trace, 2, 1);
         
         if length(T.get_edges(trace)) == 1
@@ -155,9 +159,10 @@ for i in ProgressBar(eachindex(traces))
         end
     end
     
-    proportion_with_edge[i] = num_with_edges / 2.0
-    traces[i] = trace
+    proportion_with_edge[i] = num_with_edges / num_involutive_moves
 end
+
+
 
 proportion_with_edge
 
