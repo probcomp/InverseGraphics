@@ -249,6 +249,20 @@ function load_ycbv_dense_fusion_predictions_adjusted(YCB_DIR, IDX, world_scaling
 end
 
 
+function load_ycbv_point_xyz_adjusted(YCB_DIR, world_scaling_factor, id_to_shift)
+    model_list = readlines(joinpath(YCB_DIR, "model_list.txt"))
+    id_to_cloud = Dict()
+    for (id, model_name) in enumerate(model_list)
+        model_xyz = readlines(joinpath(YCB_DIR, "models",model_name,"points.xyz"))
+        model_xyz = hcat(map(x->map(y->parse(Float64,y), split(x," ")), model_xyz)...)
+
+        scaled_cloud = Matrix(model_xyz) * world_scaling_factor
+        scaled_cloud .-=  id_to_shift[id]
+        id_to_cloud[id] = scaled_cloud
+    end
+    id_to_cloud
+end
+
 
 
 export load_ycb_model_list, load_ycbv_scene_adjusted, load_ycbv_dense_fusion_predictions_adjusted, load_ycbv_models_adjusted
