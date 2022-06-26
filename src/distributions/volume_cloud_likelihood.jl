@@ -54,8 +54,12 @@ function Gen.logpdf(
     Volume_inlier = 4.0 /3 * pi * r^3 * m_disc
     Volume_outlier = (bounds[2] - bounds[1]) * (bounds[4] - bounds[3]) * (bounds[6] - bounds[5])
 
-    return (
-        num_inside * log(p_outlier / Volume_outlier + (1 - p_outlier) / Volume_inlier) +
-        num_outside * log(p_outlier / Volume_outlier)
-    )
+    if num_inside == 0
+        return num_outside * log(p_outlier / Volume_outlier)
+    else
+        return (
+            num_inside * log(p_outlier / Volume_outlier + (1 - p_outlier) / Volume_inlier) +
+            num_outside * log(p_outlier / Volume_outlier)
+        )
+    end
 end
