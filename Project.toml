@@ -1,7 +1,7 @@
 name = "InverseGraphics"
 uuid = "4b85a743-8232-4f48-902e-cd249a333b61"
 authors = ["Nishad Gothoskar <nishadg@mit.edu>"]
-version = "0.1.2"
+version = "0.1.3"
 
 [deps]
 BenchmarkTools = "6e4b80f9-dd63-53aa-95a3-0cdb28fa8baf"
