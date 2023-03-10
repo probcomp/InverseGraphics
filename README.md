@@ -49,3 +49,42 @@ which runs the following command
 PYTHON=$(which python) PYCALL_JL_RUNTIME_PYTHON=$(which python) julia --project -e 'import Pkg; Pkg.build("Conda"); Pkg.build("PyCall")'
 ```
 
+Depending on how encryption keys are configured you might have to do below steps (e.g. on GCP's pain Ubuntu VM, you need to manually do the steps below):
+- To enable Julia's package manager to be able to pull code from github repos, you need to activate the ssh-agent, and specifically add your github key:
+```
+eval "$(ssh-agent -s)"
+ssh-add <your github key>
+
+```
+- To start an X server on your machine. Please note the monitor being output. It should look like :0 or :1. Another (maybe better way) to do it is to use `startx` but I haven't been able to get that step to work yet on a Google Cloud Project VM with attached display. 
+```
+vncserver -localhost
+# example output:
+# New 'X' desktop is machine:1
+# Starting applications specified in /home/balgobin/.vnc/xstartup
+# Log file is /home/balgobin/.vnc/machine:1.log
+```
+
+- To tell GLFW which display to use (based on output from previous step):
+```
+export DISPLAY=:1
+```
+
+- If you get the error below:
+```
+ERROR: failed to clone from git@github.com:probcomp/InverseGraphicsRegistry.git, error: GitError(Code:EEOF, Class:SSH, ERROR: You're using an RSA key with SHA-1, which is no longer allowed. Please use a newer client or a different key type.
+Please see https://github.blog/2021-09-01-improving-git-protocol-security-github/ for more information.
+```
+This is because your ssh key is not supporting SHA-2. You need to run `ssh-keygen -t ed25519` and then add this new key using `ssh-add <your NEW github key>`
+
+- Unclear how to solve this error on Ubuntu 20.04 GCP VM (it can be a bit involved https://forums.gentoo.org/viewtopic-t-1038878-start-0.html):
+
+<img width="1012" alt="Screen Shot 2022-03-28 at 13 59 42" src="https://user-images.githubusercontent.com/1942909/160468427-c3ee09ba-68ad-4741-9643-b10659e4f53e.png">
+
+
+
+
+
+
+
+
