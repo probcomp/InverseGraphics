@@ -23,5 +23,5 @@ function CameraIntrinsics(step_metadata::PyCall.PyObject)::GL.CameraIntrinsics
         clipping_near, clipping_far)
 end
 
-get_depth_image_from_step_metadata(step_metadata::PyObject) = Matrix(last(step_metadata.depth_map_list))
-get_rgb_image_from_step_metadata(step_metadata::PyObject) = Float64.(numpy.array(last(step_metadata.image_list)))
+get_depth_image_from_step_metadata(step_metadata::PyCall.PyObject) = Matrix(last(step_metadata.depth_map_list))
+get_rgb_image_from_step_metadata(step_metadata::PyCall.PyObject) = Float64.(numpy.array(last(step_metadata.image_list)))
